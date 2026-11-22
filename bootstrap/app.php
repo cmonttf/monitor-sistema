@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\EnsureLocalAccess;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -12,7 +13,8 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        //
+        // Sólo el propio equipo puede usar el panel (ver EnsureLocalAccess: DNS rebinding y clientes remotos).
+        $middleware->append(EnsureLocalAccess::class);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(
