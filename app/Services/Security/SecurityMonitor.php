@@ -88,7 +88,7 @@ class SecurityMonitor
             'status' => $result->status->value,
             'label' => $result->status->label(),
             'message' => $result->message,
-            'details' => array_values($result->details),
+            'details' => $result->details,
         ];
     }
 }
