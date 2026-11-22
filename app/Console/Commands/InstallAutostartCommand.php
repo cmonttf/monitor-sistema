@@ -28,6 +28,11 @@ class InstallAutostartCommand extends Command
     public const string SERVICE_NAME = 'monitor-seguridad.service';
 
     /**
+     * Nombre de la unidad systemd de usuario que ejecuta el scheduler de las alertas programadas.
+     */
+    public const string SCHEDULER_SERVICE_NAME = 'monitor-seguridad-alertas.service';
+
+    /**
      * Nombre del archivo .desktop de autoarranque y del lanzador del menú.
      */
     public const string DESKTOP_NAME = 'monitor-seguridad.desktop';
@@ -124,17 +129,23 @@ class InstallAutostartCommand extends Command
         File::ensureDirectoryExists(dirname($this->launcherPath()));
 
         File::put($this->servicePath(), $this->serviceUnit());
+        File::put($this->servicePath(self::SCHEDULER_SERVICE_NAME), $this->schedulerUnit());
         File::put($this->autostartPath(), $this->desktopEntry());
         File::put($this->launcherPath(), $this->desktopEntry());
 
         $this->components->task('Servicio systemd de usuario', fn (): bool => $this->systemctl('daemon-reload')
             && $this->systemctl('enable', self::SERVICE_NAME)
             && $this->systemctl('restart', self::SERVICE_NAME));
+        $this->components->task('Alertas programadas (scheduler)', fn (): bool => $this->systemctl(
+            'enable',
+            self::SCHEDULER_SERVICE_NAME
+        ) && $this->systemctl('restart', self::SCHEDULER_SERVICE_NAME));
 
         $this->components->info('Listo. El monitor se levantará y abrirá en el navegador cada vez que inicies sesión.');
         $this->components->bulletList([
             'Panel: ' . $this->dashboardUrl(),
             'Servicio: ' . $this->servicePath(),
+            'Alertas programadas: ' . $this->servicePath(self::SCHEDULER_SERVICE_NAME),
             'Autoarranque: ' . $this->autostartPath(),
             'Lanzador en el menú de aplicaciones: ' . $this->launcherPath(),
         ]);
@@ -149,9 +160,14 @@ class InstallAutostartCommand extends Command
      */
     private function uninstall(): int
     {
-        $this->systemctl('disable', '--now', self::SERVICE_NAME);
+        $this->systemctl('disable', '--now', self::SERVICE_NAME, self::SCHEDULER_SERVICE_NAME);
 
-        File::delete([$this->servicePath(), $this->autostartPath(), $this->launcherPath()]);
+        File::delete([
+            $this->servicePath(),
+            $this->servicePath(self::SCHEDULER_SERVICE_NAME),
+            $this->autostartPath(),
+            $this->launcherPath(),
+        ]);
 
         $this->systemctl('daemon-reload');
 
@@ -186,6 +202,35 @@ class InstallAutostartCommand extends Command
             ExecStart="{$php}" "{$artisan}" serve --host={$host} --port={$port} --no-reload
             Restart=on-failure
             RestartSec=5
+
+            [Install]
+            WantedBy=default.target
+
+            UNIT;
+    }
+
+    /**
+     * Genera la unidad systemd que ejecuta `artisan schedule:work`, que dispara las alertas programadas.
+     *
+     * @return string Contenido de la unidad.
+     */
+    private function schedulerUnit(): string
+    {
+        $php = PHP_BINARY;
+        $artisan = base_path('artisan');
+        $workingDirectory = base_path();
+
+        return <<<UNIT
+            [Unit]
+            Description=Monitor de Seguridad: alertas programadas (Laravel scheduler)
+            After=network.target
+
+            [Service]
+            Type=simple
+            WorkingDirectory={$workingDirectory}
+            ExecStart="{$php}" "{$artisan}" schedule:work
+            Restart=on-failure
+            RestartSec=10
 
             [Install]
             WantedBy=default.target
@@ -241,13 +286,15 @@ class InstallAutostartCommand extends Command
     }
 
     /**
-     * Ruta de la unidad systemd de usuario.
+     * Ruta de una unidad systemd de usuario.
+     *
+     * @param string $unit Nombre de la unidad (por defecto, la del servidor del monitor).
      *
      * @return string Ruta absoluta.
      */
-    private function servicePath(): string
+    private function servicePath(string $unit = self::SERVICE_NAME): string
     {
-        return $this->configHome() . '/systemd/user/' . self::SERVICE_NAME;
+        return $this->configHome() . '/systemd/user/' . $unit;
     }
 
     /**

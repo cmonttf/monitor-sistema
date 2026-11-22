@@ -42,6 +42,13 @@ class SecurityDashboardController extends Controller
             'resourcesRefreshSeconds' => config('security-monitor.resources_refresh_seconds'),
             'resourcesHistoryMinutes' => config('security-monitor.resources_history_minutes'),
             'attacksRefreshSeconds' => config('security-monitor.attacks_refresh_seconds'),
+            'alerts' => [
+                'enabled' => (bool) config('security-monitor.alerts.enabled'),
+                'minutes' => (int) config('security-monitor.alerts.minutes'),
+                'email' => (string) config('security-monitor.alerts.email'),
+                'mailConfigured' => ! in_array(config('mail.default'), ['log', 'array'], true),
+                'desktop' => (bool) config('security-monitor.alerts.desktop'),
+            ],
             'resourceThresholds' => [
                 'memory' => ['warning' => MemoryCheck::WARNING_PERCENT, 'critical' => MemoryCheck::CRITICAL_PERCENT],
                 'disk' => [

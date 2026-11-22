@@ -23,5 +23,6 @@ if (element) {
         historyMs: Number(data.historyMs),
         thresholds: JSON.parse(data.thresholds),
         initialReport: JSON.parse(data.report),
+        alerts: JSON.parse(data.alerts),
     }).mount(element);
 }

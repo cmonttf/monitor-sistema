@@ -30,6 +30,7 @@
         data-history-ms="{{ $resourcesHistoryMinutes * 60 * 1000 }}"
         data-thresholds="{{ json_encode($resourceThresholds) }}"
         data-report="{{ json_encode($report) }}"
+        data-alerts="{{ json_encode($alerts) }}"
     >
         <noscript>
             <div class="container py-4">El panel necesita JavaScript habilitado.</div>

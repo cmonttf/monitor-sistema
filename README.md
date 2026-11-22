@@ -134,10 +134,11 @@ En **Linux** instala, para el usuario actual:
 - Un servicio systemd de usuario (`~/.config/systemd/user/monitor-seguridad.service`) que levanta el servidor en `http://127.0.0.1:8787`.
 - Una entrada de autoarranque del escritorio (`~/.config/autostart/monitor-seguridad.desktop`) que abre el panel en el navegador al iniciar sesión.
 - Un lanzador en el menú de aplicaciones.
+- Un servicio systemd de usuario (`monitor-seguridad-alertas.service`) con el *scheduler* de las alertas programadas.
 
 En **Windows** crea, sin necesidad de ser administrador:
 
-- Un script de PowerShell (`storage/app/monitor-seguridad.ps1`) que levanta el servidor oculto, si no está corriendo, y abre el panel.
+- Un script de PowerShell (`storage/app/monitor-seguridad.ps1`) que levanta ocultos el servidor y el *scheduler* de las alertas, si no están corriendo, y abre el panel.
 - Un acceso directo en la carpeta Inicio, que lo ejecuta al iniciar sesión, y otro en el menú Inicio.
 
 Para abrir el panel a mano: `php artisan monitor:open`. Para desinstalar el arranque automático: `php artisan monitor:autostart --remove`.
@@ -156,6 +157,37 @@ Es un comando de solo lectura: no permite cambiar reglas ni desactivar el cortaf
 
 Con **firewalld** no hace falta: sus reglas se consultan sin privilegios.
 
+## Alertas programadas
+
+Cada 5 minutos, aunque el navegador esté cerrado, el monitor revisa el equipo y avisa cuando algún elemento **empeora** (pasa a 🟠 o 🔴): envía un correo con los pasos para solucionarlo y muestra una notificación de escritorio. Cada cambio se avisa una sola vez; cuando un problema vuelve a 🟢, se informa como resuelto. La primera revisión avisa de los problemas que ya existían.
+
+Las ejecuta el *scheduler* de Laravel (`php artisan schedule:work`), que `monitor:autostart` deja corriendo: en Linux como el servicio `monitor-seguridad-alertas.service` y en Windows, oculto, desde el mismo script de inicio. El encabezado del panel muestra el estado de las alertas.
+
+### Configurar el correo
+
+En `.env`, indica el destinatario y un servidor SMTP. Ejemplo con Gmail (requiere verificación en dos pasos y una [contraseña de aplicación](https://myaccount.google.com/apppasswords), no tu contraseña normal):
+
+```dotenv
+SECURITY_MONITOR_ALERT_EMAIL=tu-correo@gmail.com
+
+MAIL_MAILER=smtp
+MAIL_SCHEME=smtp
+MAIL_HOST=smtp.gmail.com
+MAIL_PORT=587
+MAIL_USERNAME=tu-correo@gmail.com
+MAIL_PASSWORD="la contraseña de aplicación de 16 letras"
+MAIL_FROM_ADDRESS=tu-correo@gmail.com
+```
+
+Luego comprueba la configuración con un aviso de prueba:
+
+```bash
+php artisan config:clear
+php artisan monitor:alert --test
+```
+
+Mientras `MAIL_MAILER=log`, los correos se escriben en `storage/logs/laravel.log` en vez de enviarse.
+
 ## Seguridad del panel
 
 El panel solo atiende al propio equipo: el servidor escucha en `127.0.0.1` y, además, cada solicitud debe usar el nombre `127.0.0.1`, `localhost` o `[::1]` y venir de una dirección de loopback; si no, responde 403 y registra el intento, que aparece en la tarjeta «Intentos de acceso al panel». Esto impide que una página web maliciosa lea el estado del equipo mediante *DNS rebinding* (un dominio externo que pasa a resolver a `127.0.0.1`).
@@ -173,6 +205,10 @@ Variables de `.env`:
 | `SECURITY_MONITOR_RESOURCES_HISTORY_MINUTES` | `15` | Cuánto historial de RAM conserva el gráfico |
 | `SECURITY_MONITOR_ATTACKS_REFRESH_SECONDS` | `15` | Cada cuánto se actualiza el gráfico de actividad de ataques |
 | `SECURITY_MONITOR_ATTACKS_HISTORY_HOURS` | `24` | Cuántas horas de eventos de ataque se consultan |
+| `SECURITY_MONITOR_ALERTS` | `true` | Activa las alertas programadas |
+| `SECURITY_MONITOR_ALERT_EMAIL` | (vacío) | Destinatario de los correos de alerta; vacío, solo notificación de escritorio |
+| `SECURITY_MONITOR_ALERT_DESKTOP` | `true` | Muestra notificaciones de escritorio |
+| `SECURITY_MONITOR_ALERT_MINUTES` | `5` | Cada cuántos minutos se revisa el equipo (1 a 59) |
 
 Si cambias el puerto, vuelve a ejecutar `php artisan monitor:autostart`.
 
@@ -199,6 +235,7 @@ Un chequeo que lanza una excepción aparece como ⚪ sin detener a los demás.
 | `app/Services/Security/UfwStatus.php`, `FirewalldStatus.php` | Evalúan los puertos contra las reglas de UFW o firewalld |
 | `app/Services/Security/ResourceSampler.php` | Lee el uso de memoria y discos (`/proc/meminfo` y `df`, o CIM en Windows) |
 | `app/Services/Security/WindowsAutostart.php` | Arranque automático en Windows (script y accesos directos) |
+| `app/Services/Security/AlertState.php`, `DesktopNotifier.php`, `app/Mail/SecurityAlertMail.php` | Alertas programadas: cambios desde el último aviso, notificación de escritorio y correo |
 | `app/Services/Security/AttackTimeline.php` | Eventos de ataque con su hora para el gráfico en tiempo real |
 | `app/Services/Security/IntegritySnapshot.php`, `IntegrityBaseline.php` | Huella de los elementos vigilados y línea base del monitor de integridad |
 | `app/Services/Security/BlockedRequestLog.php`, `app/Http/Middleware/EnsureLocalAccess.php` | Restricción del panel al propio equipo y registro de los intentos rechazados |
@@ -206,7 +243,7 @@ Un chequeo que lanza una excepción aparece como ⚪ sin detener a los demás.
 | `resources/views/security/dashboard.blade.php` | Página que monta la interfaz con su configuración y el reporte inicial |
 | `resources/js/dashboard/` | Componentes Vue del panel (tarjetas, recursos en tiempo real, gráfico) |
 | `resources/css/dashboard.css` | Estilos propios sobre Bootstrap (franjas de estado, medidores y gráfico) |
-| `app/Console/Commands/` | `monitor:autostart`, `monitor:open` y `monitor:integrity` |
+| `app/Console/Commands/` | `monitor:autostart`, `monitor:open`, `monitor:integrity` y `monitor:alert` |
 
 ## Desarrollo de la interfaz
 

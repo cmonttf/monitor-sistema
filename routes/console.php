@@ -1,8 +1,17 @@
 <?php
 
-use Illuminate\Foundation\Inspiring;
-use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Schedule;
 
-Artisan::command('inspire', function () {
-    $this->comment(Inspiring::quote());
-})->purpose('Display an inspiring quote');
+/*
+|--------------------------------------------------------------------------
+| Tareas programadas
+|--------------------------------------------------------------------------
+|
+| Revisión periódica del equipo con avisos por correo y al escritorio cuando
+| algún elemento de seguridad empeora (ver config/security-monitor.php).
+|
+*/
+
+Schedule::command('monitor:alert')
+    ->cron('*/' . config('security-monitor.alerts.minutes') . ' * * * *')
+    ->withoutOverlapping(30);

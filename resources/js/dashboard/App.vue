@@ -21,6 +21,7 @@ const props = defineProps({
     historyMs: { type: Number, required: true },
     thresholds: { type: Object, required: true },
     initialReport: { type: Object, required: true },
+    alerts: { type: Object, required: true },
 });
 
 const RESOURCES_CATEGORY = 'Recursos';
@@ -34,6 +35,27 @@ const BANNERS = {
 const FAVICON_COLORS = { ok: '#198754', warning: '#ffc107', critical: '#dc3545', unknown: '#6c757d' };
 
 const report = ref(props.initialReport);
+
+const alertsSummary = computed(() => {
+    const { enabled, minutes, email, mailConfigured, desktop } = props.alerts;
+
+    if (!enabled) {
+        return { text: 'Alertas desactivadas', warn: true };
+    }
+
+    const channels = [];
+    if (email) {
+        channels.push(mailConfigured ? `correo a ${email}` : 'correo sin configurar (MAIL_MAILER en .env)');
+    }
+    if (desktop) {
+        channels.push('escritorio');
+    }
+
+    return {
+        text: `Alertas cada ${minutes} min: ${channels.length ? channels.join(' · ') : 'sin canales'}`,
+        warn: !channels.length || (email && !mailConfigured),
+    };
+});
 const isRefreshing = ref(false);
 const error = ref(null);
 let timer = null;
@@ -118,6 +140,9 @@ onBeforeUnmount(() => clearInterval(timer));
                 <h1 class="h3 mb-1">🛡️ {{ appName }}</h1>
                 <div class="small text-body-secondary">
                     Equipo <strong>{{ hostname }}</strong> · {{ report.platform }} · Última verificación: {{ checkedAt }}
+                </div>
+                <div class="small" :class="alertsSummary.warn ? 'text-warning-emphasis' : 'text-body-secondary'">
+                    🔔 {{ alertsSummary.text }}
                 </div>
             </div>
             <button type="button" class="btn btn-outline-secondary" :disabled="isRefreshing" @click="load(true)">

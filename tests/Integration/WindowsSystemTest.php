@@ -4,6 +4,7 @@ namespace Tests\Integration;
 
 use App\Enums\CheckStatus;
 use App\Services\Security\AttackTimeline;
+use App\Services\Security\DesktopNotifier;
 use App\Services\Security\Checks\SecurityCheck;
 use App\Services\Security\Checks\WindowsCheck;
 use App\Services\Security\Checks\WindowsFirewallCheck;
@@ -90,6 +91,9 @@ class WindowsSystemTest extends TestCase
             8787
         );
 
+        $scripts['DesktopNotifier::windowsScript'] = app(DesktopNotifier::class)
+            ->windowsScript('Monitor de Seguridad', "Prueba de O'Brien");
+
         return $scripts;
     }
 
@@ -116,7 +120,7 @@ class WindowsSystemTest extends TestCase
             . '$errors | ForEach-Object { $_.Message }; exit @($errors).Count';
 
         $scripts = self::powershellScripts();
-        $this->assertGreaterThanOrEqual(17, count($scripts));
+        $this->assertGreaterThanOrEqual(18, count($scripts));
 
         foreach ($scripts as $origin => $script) {
             $result = Process::input($script)

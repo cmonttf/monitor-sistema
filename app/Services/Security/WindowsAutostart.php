@@ -75,7 +75,8 @@ class WindowsAutostart
     }
 
     /**
-     * Elimina los accesos directos y el script lanzador, y detiene el servidor que escucha en el puerto.
+     * Elimina los accesos directos y el script lanzador, y detiene el servidor que escucha en el puerto y
+     * el scheduler de las alertas.
      *
      * @param int $port Puerto del servidor.
      *
@@ -87,14 +88,15 @@ class WindowsAutostart
 
         $this->system->powershell(implode("\n", [
             "Get-CimInstance Win32_Process -Filter \"Name = 'php.exe'\" |",
-            "    Where-Object { \$_.CommandLine -match ':{$port}\\b|--port={$port}\\b' } |",
+            "    Where-Object { \$_.CommandLine -match ':{$port}\\b|--port={$port}\\b|schedule:work' } |",
             '    ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }',
             '[pscustomobject]@{ ok = $true }',
         ]));
     }
 
     /**
-     * Genera el script que levanta el servidor oculto (si el puerto no está en uso) y abre el panel.
+     * Genera el script que levanta el servidor oculto (si el puerto no está en uso), el scheduler de las
+     * alertas (si no está corriendo) y abre el panel.
      *
      * @param string $php     Ruta del ejecutable de PHP.
      * @param string $artisan Ruta del archivo artisan.
@@ -114,6 +116,12 @@ class WindowsAutostart
             "\$serve = @({$artisanArgument}, 'serve', '--host={$host}', '--port={$port}', '--no-reload')",
             "if (-not (Get-NetTCPConnection -State Listen -LocalPort {$port} -ErrorAction SilentlyContinue)) {",
             "    Start-Process -FilePath {$phpPath} -ArgumentList \$serve -WindowStyle Hidden",
+            '}',
+            "\$scheduler = Get-CimInstance Win32_Process -Filter \"Name = 'php.exe'\" | "
+                . "Where-Object { \$_.CommandLine -like '*schedule:work*' }",
+            'if (-not $scheduler) {',
+            "    Start-Process -FilePath {$phpPath} -ArgumentList @({$artisanArgument}, 'schedule:work')"
+                . ' -WindowStyle Hidden',
             '}',
             "Start-Process -FilePath {$phpPath} -ArgumentList @({$artisanArgument}, 'monitor:open')"
                 . ' -WindowStyle Hidden',

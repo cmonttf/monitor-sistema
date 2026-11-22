@@ -65,6 +65,25 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Alertas programadas
+    |--------------------------------------------------------------------------
+    |
+    | Cada "minutes" minutos se revisa el equipo y, si algún elemento empeoró,
+    | se avisa por correo (a "email", con la configuración MAIL_* de .env) y con
+    | una notificación de escritorio. Requiere el scheduler en ejecución
+    | (php artisan schedule:work, que monitor:autostart deja corriendo).
+    |
+    */
+
+    'alerts' => [
+        'enabled' => (bool) env('SECURITY_MONITOR_ALERTS', true),
+        'email' => env('SECURITY_MONITOR_ALERT_EMAIL'),
+        'desktop' => (bool) env('SECURITY_MONITOR_ALERT_DESKTOP', true),
+        'minutes' => max(1, min(59, (int) env('SECURITY_MONITOR_ALERT_MINUTES', 5))),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Chequeos habilitados (en orden de aparición)
     |--------------------------------------------------------------------------
     |
