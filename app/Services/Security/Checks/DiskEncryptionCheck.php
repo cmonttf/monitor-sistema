@@ -8,19 +8,35 @@ use App\Services\Security\CheckResult;
  * Presencia de volúmenes cifrados con LUKS/dm-crypt.
  *
  * @package App\Services\Security\Checks
+ * @author  Camilo Montt <cmonttf@gmail.com>
  */
 class DiskEncryptionCheck extends SystemCheck
 {
+    /**
+     * Nombre visible del chequeo en el panel.
+     *
+     * @return string Nombre del chequeo.
+     */
     public function name(): string
     {
         return 'Cifrado de disco';
     }
 
+    /**
+     * Categoría del panel en la que se agrupa el chequeo.
+     *
+     * @return string Nombre de la categoría.
+     */
     public function category(): string
     {
         return 'Sistema';
     }
 
+    /**
+     * Busca en `lsblk` volúmenes de tipo crypt (LUKS); si no hay ninguno, advierte que el disco no está cifrado.
+     *
+     * @return CheckResult Estado, resumen y detalles del chequeo.
+     */
     public function run(): CheckResult
     {
         $result = $this->system->run(['lsblk', '-rno', 'NAME,TYPE']);

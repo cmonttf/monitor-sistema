@@ -3,12 +3,22 @@
 namespace Tests\Feature\Security;
 
 use App\Services\Security\CheckResult;
-use App\Services\Security\Checks\SecurityCheck;
 use RuntimeException;
 use Tests\TestCase;
 
+/**
+ * Pruebas del panel y del endpoint de estado con chequeos simulados.
+ *
+ * @package Tests\Feature\Security
+ * @author  Camilo Montt <cmonttf@gmail.com>
+ */
 class SecurityDashboardTest extends TestCase
 {
+    /**
+     * Reinicia la cola del chequeo simulado y lo deja como único chequeo configurado.
+     *
+     * @return void
+     */
     protected function setUp(): void
     {
         parent::setUp();
@@ -17,6 +27,11 @@ class SecurityDashboardTest extends TestCase
         config(['security-monitor.checks' => [FakeCheck::class]]);
     }
 
+    /**
+     * El panel se muestra y el contenido del reporte llega escapado (sin HTML inyectado).
+     *
+     * @return void
+     */
     public function test_dashboard_page_renders_the_report(): void
     {
         FakeCheck::$results = [CheckResult::critical('Cortafuegos <b>apagado</b>')];
@@ -29,6 +44,11 @@ class SecurityDashboardTest extends TestCase
         $response->assertDontSee('Cortafuegos <b>apagado</b>', false);
     }
 
+    /**
+     * El estado global es el peor de los chequeos y el resumen cuenta cada estado.
+     *
+     * @return void
+     */
     public function test_status_endpoint_reports_the_worst_status_and_a_summary(): void
     {
         config(['security-monitor.checks' => [FakeCheck::class, FakeCheck::class, FakeCheck::class]]);
@@ -55,6 +75,11 @@ class SecurityDashboardTest extends TestCase
         ]);
     }
 
+    /**
+     * Un chequeo que lanza una excepción queda sin datos y no impide ejecutar los demás.
+     *
+     * @return void
+     */
     public function test_a_failing_check_is_reported_as_unknown_without_breaking_the_others(): void
     {
         config(['security-monitor.checks' => [FakeCheck::class, FakeCheck::class]]);
@@ -69,44 +94,21 @@ class SecurityDashboardTest extends TestCase
         $response->assertJsonPath('overall.status', 'unknown');
     }
 
+    /**
+     * El reporte se sirve desde la caché hasta que se pide ?refresh=1.
+     *
+     * @return void
+     */
     public function test_status_is_cached_until_a_refresh_is_requested(): void
     {
-        FakeCheck::$results = [CheckResult::ok('Primero'), CheckResult::warning('Segundo'), CheckResult::critical('Tercero')];
+        FakeCheck::$results = [
+            CheckResult::ok('Primero'),
+            CheckResult::warning('Segundo'),
+            CheckResult::critical('Tercero'),
+        ];
 
         $this->getJson(route('security.status'))->assertJsonPath('checks.0.message', 'Primero');
         $this->getJson(route('security.status'))->assertJsonPath('checks.0.message', 'Primero');
         $this->getJson(route('security.status', ['refresh' => 1]))->assertJsonPath('checks.0.message', 'Segundo');
-    }
-}
-
-/**
- * Chequeo de prueba que devuelve (o lanza) los resultados en cola.
- */
-class FakeCheck implements SecurityCheck
-{
-    /**
- * @var list<CheckResult|\Throwable>
-*/
-    public static array $results = [];
-
-    public function name(): string
-    {
-        return 'Chequeo de prueba';
-    }
-
-    public function category(): string
-    {
-        return 'Pruebas';
-    }
-
-    public function run(): CheckResult
-    {
-        $result = array_shift(self::$results) ?? CheckResult::ok('Sin datos de prueba');
-
-        if ($result instanceof \Throwable) {
-            throw $result;
-        }
-
-        return $result;
     }
 }

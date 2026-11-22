@@ -19,8 +19,19 @@ use Mockery\MockInterface;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
+/**
+ * Pruebas de los chequeos de seguridad con comandos y archivos del sistema simulados.
+ *
+ * @package Tests\Feature\Security
+ * @author  Camilo Montt <cmonttf@gmail.com>
+ */
 class SecurityChecksTest extends TestCase
 {
+    /**
+     * Impide que las pruebas ejecuten procesos reales del sistema.
+     *
+     * @return void
+     */
     protected function setUp(): void
     {
         parent::setUp();
@@ -30,6 +41,10 @@ class SecurityChecksTest extends TestCase
 
     /**
      * Patrón de Process::fake para un comando ejecutado como array (argumentos entre comillas).
+     *
+     * @param string $command Comando con argumentos separados por espacios.
+     *
+     * @return string Patrón con cada argumento entre comillas simples.
      */
     private static function command(string $command): string
     {
@@ -37,20 +52,33 @@ class SecurityChecksTest extends TestCase
     }
 
     /**
-     * Inspector real para comandos (interceptados con Process::fake) y simulado para archivos.
+     * Inspector real para comandos (interceptados con Process::fake) y simulado para archivos y servicios.
      *
-     * @param array<string, string|null>  $files  Ruta => contenido (null = no existe).
+     * @param array<string, string|null> $files    Ruta => contenido (null = no existe).
+     * @param list<string>               $commands Ejecutables que se consideran instalados.
+     * @param array<string, string>      $services Unidad systemd => estado.
+     *
+     * @return SystemInspector Inspector parcialmente simulado.
      */
     private function inspector(array $files = [], array $commands = [], array $services = []): SystemInspector
     {
-        return $this->partialMock(SystemInspector::class, function (MockInterface $mock) use ($files, $commands, $services): void {
-            $mock->shouldReceive('hasCommand')->andReturnUsing(fn (string $binary): bool => in_array($binary, $commands, true));
+        $configure = function (MockInterface $mock) use ($files, $commands, $services): void {
+            $mock->shouldReceive('hasCommand')
+                ->andReturnUsing(fn (string $binary): bool => in_array($binary, $commands, true));
             $mock->shouldReceive('readFile')->andReturnUsing(fn (string $path): ?string => $files[$path] ?? null);
             $mock->shouldReceive('fileExists')->andReturnUsing(fn (string $path): bool => isset($files[$path]));
-            $mock->shouldReceive('serviceState')->andReturnUsing(fn (string $unit): string => $services[$unit] ?? 'inactive');
-        });
+            $mock->shouldReceive('serviceState')
+                ->andReturnUsing(fn (string $unit): string => $services[$unit] ?? 'inactive');
+        };
+
+        return $this->partialMock(SystemInspector::class, $configure);
     }
 
+    /**
+     * Las actualizaciones de seguridad pendientes son críticas y se listan primero.
+     *
+     * @return void
+     */
     public function test_apt_reports_pending_security_updates_as_critical(): void
     {
         Process::fake([self::command('apt list --upgradable') => Process::result(<<<'OUT'
@@ -66,6 +94,11 @@ class SecurityChecksTest extends TestCase
         $this->assertSame(['🔒 openssl', 'tracker-extract'], $result->details);
     }
 
+    /**
+     * Las actualizaciones normales son advertencia y sin actualizaciones el estado es correcto.
+     *
+     * @return void
+     */
     public function test_apt_reports_regular_updates_as_warning_and_none_as_ok(): void
     {
         Process::fake([self::command('apt list --upgradable') => Process::sequence()
@@ -79,7 +112,9 @@ class SecurityChecksTest extends TestCase
     }
 
     /**
-     * @return array<string, array{string, CheckStatus}>
+     * Fechas de firmas y el estado esperado para cada antigüedad.
+     *
+     * @return array<string, array{string, CheckStatus}> Caso => [fecha de firmas, estado esperado].
      */
     public static function signatureAges(): array
     {
@@ -90,6 +125,14 @@ class SecurityChecksTest extends TestCase
         ];
     }
 
+    /**
+     * El estado del antivirus depende de la antigüedad de las firmas.
+     *
+     * @param string      $signedAt Fecha de las firmas.
+     * @param CheckStatus $expected Estado esperado.
+     *
+     * @return void
+     */
     #[DataProvider('signatureAges')]
     public function test_antivirus_status_depends_on_signature_age(string $signedAt, CheckStatus $expected): void
     {
@@ -102,6 +145,11 @@ class SecurityChecksTest extends TestCase
         $this->assertSame($expected, $result->status);
     }
 
+    /**
+     * Sin ClamAV instalado el estado es advertencia.
+     *
+     * @return void
+     */
     public function test_missing_antivirus_is_a_warning(): void
     {
         $result = (new AntivirusSignaturesCheck($this->inspector()))->run();
@@ -109,15 +157,24 @@ class SecurityChecksTest extends TestCase
         $this->assertSame(CheckStatus::Warning, $result->status);
     }
 
+    /**
+     * Un servicio freshclam fallido es crítico.
+     *
+     * @return void
+     */
     public function test_failed_freshclam_service_is_critical(): void
     {
-        $result = (new AntivirusUpdaterCheck($this->inspector(commands: ['freshclam'], services: ['clamav-freshclam' => 'failed'])))->run();
+        $inspector = $this->inspector(commands: ['freshclam'], services: ['clamav-freshclam' => 'failed']);
+
+        $result = (new AntivirusUpdaterCheck($inspector))->run();
 
         $this->assertSame(CheckStatus::Critical, $result->status);
     }
 
     /**
-     * @return array<string, array{string, CheckStatus}>
+     * Estados del servicio clamav-daemon y el estado esperado de la tarjeta.
+     *
+     * @return array<string, array{string, CheckStatus}> Caso => [estado systemd, estado esperado].
      */
     public static function daemonStates(): array
     {
@@ -129,14 +186,29 @@ class SecurityChecksTest extends TestCase
         ];
     }
 
+    /**
+     * El estado del escáner clamd depende del estado de su servicio.
+     *
+     * @param string      $state    Estado systemd del servicio.
+     * @param CheckStatus $expected Estado esperado.
+     *
+     * @return void
+     */
     #[DataProvider('daemonStates')]
     public function test_clamd_status_depends_on_service_state(string $state, CheckStatus $expected): void
     {
-        $result = (new AntivirusDaemonCheck($this->inspector(commands: ['clamd'], services: ['clamav-daemon' => $state])))->run();
+        $inspector = $this->inspector(commands: ['clamd'], services: ['clamav-daemon' => $state]);
+
+        $result = (new AntivirusDaemonCheck($inspector))->run();
 
         $this->assertSame($expected, $result->status);
     }
 
+    /**
+     * Sin clamav-daemon instalado el estado es sin datos.
+     *
+     * @return void
+     */
     public function test_missing_clamd_is_unknown(): void
     {
         $result = (new AntivirusDaemonCheck($this->inspector()))->run();
@@ -144,25 +216,47 @@ class SecurityChecksTest extends TestCase
         $this->assertSame(CheckStatus::Unknown, $result->status);
     }
 
+    /**
+     * El cortafuegos sólo es correcto si está habilitado y su servicio activo.
+     *
+     * @return void
+     */
     public function test_firewall_is_ok_only_when_enabled_and_running(): void
     {
         $enabled = ['/etc/ufw/ufw.conf' => "ENABLED=yes\n"];
 
-        $this->assertSame(CheckStatus::Ok, (new FirewallCheck($this->inspector($enabled, ['ufw'], ['ufw' => 'active'])))->run()->status);
-        $this->assertSame(CheckStatus::Critical, (new FirewallCheck($this->inspector(['/etc/ufw/ufw.conf' => "ENABLED=no\n"], ['ufw'], ['ufw' => 'active'])))->run()->status);
-        $this->assertSame(CheckStatus::Critical, (new FirewallCheck($this->inspector($enabled, ['ufw'], ['ufw' => 'inactive'])))->run()->status);
+        $disabled = ['/etc/ufw/ufw.conf' => "ENABLED=no\n"];
+        $statusFor = fn (SystemInspector $inspector): CheckStatus => (new FirewallCheck($inspector))->run()->status;
+
+        $this->assertSame(CheckStatus::Ok, $statusFor($this->inspector($enabled, ['ufw'], ['ufw' => 'active'])));
+        $this->assertSame(CheckStatus::Critical, $statusFor($this->inspector($disabled, ['ufw'], ['ufw' => 'active'])));
+        $this->assertSame(
+            CheckStatus::Critical,
+            $statusFor($this->inspector($enabled, ['ufw'], ['ufw' => 'inactive']))
+        );
         $this->assertSame(CheckStatus::Critical, (new FirewallCheck($this->inspector()))->run()->status);
     }
 
+    /**
+     * Las actualizaciones automáticas desactivadas son críticas.
+     *
+     * @return void
+     */
     public function test_unattended_upgrades_disabled_is_critical(): void
     {
-        $files = ['/etc/apt/apt.conf.d/20auto-upgrades' => "APT::Periodic::Update-Package-Lists \"1\";\nAPT::Periodic::Unattended-Upgrade \"0\";\n"];
+        $files = [
+            '/etc/apt/apt.conf.d/20auto-upgrades' => "APT::Periodic::Update-Package-Lists \"1\";\n"
+                . "APT::Periodic::Unattended-Upgrade \"0\";\n",
+        ];
 
         $result = (new UnattendedUpgradesCheck($this->inspector($files, ['unattended-upgrade'])))->run();
 
         $this->assertSame(CheckStatus::Critical, $result->status);
     }
 
+    /**
+     * Salida de `ss -tlnH` con puertos locales y dos puertos expuestos (80 y 51330).
+     */
     private const string LISTENERS = <<<'OUT'
         LISTEN 0 4096 127.0.0.53%lo:53 0.0.0.0:*
         LISTEN 0 511 127.0.0.1:8787 0.0.0.0:*
@@ -171,14 +265,31 @@ class SecurityChecksTest extends TestCase
         LISTEN 0 4096 *:51330 *:*
         OUT;
 
+    /**
+     * Simula `ss` con los puertos de prueba y `sudo ufw status verbose` con la salida indicada.
+     *
+     * @param string $ufwOutput   Salida simulada de UFW.
+     * @param int    $ufwExitCode Código de salida simulado de sudo/UFW.
+     *
+     * @return void
+     */
     private function fakePorts(string $ufwOutput, int $ufwExitCode = 0): void
     {
         Process::fake([
             self::command('ss -tlnH') => Process::result(self::LISTENERS),
-            self::command('sudo -n /usr/sbin/ufw status verbose') => Process::result($ufwOutput, exitCode: $ufwExitCode),
+            self::command('sudo -n /usr/sbin/ufw status verbose')
+                => Process::result($ufwOutput, exitCode: $ufwExitCode),
         ]);
     }
 
+    /**
+     * Arma una salida de `ufw status verbose` activa con las reglas y la política indicadas.
+     *
+     * @param string $rules   Líneas de reglas en el formato de UFW.
+     * @param string $default Política por defecto de entrada.
+     *
+     * @return string Salida simulada.
+     */
     private static function ufwStatus(string $rules = '', string $default = 'deny'): string
     {
         return <<<OUT
@@ -193,6 +304,11 @@ class SecurityChecksTest extends TestCase
             OUT;
     }
 
+    /**
+     * Los puertos bloqueados por la política por defecto se muestran como correctos.
+     *
+     * @return void
+     */
     public function test_ports_blocked_by_the_default_policy_are_ok(): void
     {
         $this->fakePorts(self::ufwStatus());
@@ -207,11 +323,20 @@ class SecurityChecksTest extends TestCase
         ], $result->details);
     }
 
+    /**
+     * Un puerto permitido mediante un perfil de aplicación es advertencia.
+     *
+     * @return void
+     */
     public function test_port_allowed_through_an_app_profile_is_a_warning(): void
     {
-        $this->fakePorts(self::ufwStatus("Apache Full                ALLOW IN    Anywhere\nApache Full (v6)           ALLOW IN    Anywhere (v6)"));
-        $inspector = $this->inspector(['/etc/ufw/applications.d/apache2-utils.ufw.profile' => "[Apache Full]\ntitle=Web\nports=80,443/tcp\n"]);
-        $inspector->shouldReceive('glob')->with('/etc/ufw/applications.d/*')->andReturn(['/etc/ufw/applications.d/apache2-utils.ufw.profile']);
+        $profile = '/etc/ufw/applications.d/apache2-utils.ufw.profile';
+        $this->fakePorts(self::ufwStatus(
+            "Apache Full                ALLOW IN    Anywhere\n"
+            . 'Apache Full (v6)           ALLOW IN    Anywhere (v6)'
+        ));
+        $inspector = $this->inspector([$profile => "[Apache Full]\ntitle=Web\nports=80,443/tcp\n"]);
+        $inspector->shouldReceive('glob')->with('/etc/ufw/applications.d/*')->andReturn([$profile]);
         $inspector->shouldReceive('glob')->with('/etc/ufw/applications.d/*/*')->andReturn([]);
 
         $result = (new OpenPortsCheck($inspector))->run();
@@ -223,9 +348,18 @@ class SecurityChecksTest extends TestCase
         ], $result->details);
     }
 
+    /**
+     * Se aplica la primera regla que coincide, incluidos rangos y orígenes restringidos.
+     *
+     * @return void
+     */
     public function test_first_matching_rule_wins(): void
     {
-        $this->fakePorts(self::ufwStatus("80/tcp                     DENY IN     Anywhere\n80,443/tcp                 ALLOW IN    Anywhere\n51000:52000/tcp            ALLOW IN    192.168.1.0/24"));
+        $this->fakePorts(self::ufwStatus(
+            "80/tcp                     DENY IN     Anywhere\n"
+            . "80,443/tcp                 ALLOW IN    Anywhere\n"
+            . '51000:52000/tcp            ALLOW IN    192.168.1.0/24'
+        ));
 
         $result = (new OpenPortsCheck($this->inspector()))->run();
 
@@ -235,15 +369,28 @@ class SecurityChecksTest extends TestCase
         ], $result->details);
     }
 
+    /**
+     * Las reglas de otro protocolo o de salida no abren el puerto.
+     *
+     * @return void
+     */
     public function test_rules_for_other_protocols_or_outgoing_traffic_do_not_open_ports(): void
     {
-        $this->fakePorts(self::ufwStatus("80/udp                     ALLOW IN    Anywhere\n51330                      ALLOW OUT   Anywhere"));
+        $this->fakePorts(self::ufwStatus(
+            "80/udp                     ALLOW IN    Anywhere\n"
+            . '51330                      ALLOW OUT   Anywhere'
+        ));
 
         $result = (new OpenPortsCheck($this->inspector()))->run();
 
         $this->assertSame(CheckStatus::Ok, $result->status);
     }
 
+    /**
+     * Con política por defecto allow los puertos quedan accesibles.
+     *
+     * @return void
+     */
     public function test_ports_are_open_when_the_default_policy_allows(): void
     {
         $this->fakePorts(self::ufwStatus(default: 'allow'));
@@ -254,6 +401,11 @@ class SecurityChecksTest extends TestCase
         $this->assertSame('2 puertos son accesibles desde la red a través del cortafuegos.', $result->message);
     }
 
+    /**
+     * Sin permiso para leer UFW se listan los puertos y se explica cómo habilitarlo.
+     *
+     * @return void
+     */
     public function test_without_permission_to_read_ufw_it_lists_ports_and_explains_how_to_enable_it(): void
     {
         $this->fakePorts('sudo: a password is required', ufwExitCode: 1);
@@ -261,11 +413,19 @@ class SecurityChecksTest extends TestCase
         $result = (new OpenPortsCheck($this->inspector()))->run();
 
         $this->assertSame(CheckStatus::Warning, $result->status);
-        $this->assertSame('2 puertos TCP escuchan en la red (no se pudieron leer las reglas de UFW).', $result->message);
+        $this->assertSame(
+            '2 puertos TCP escuchan en la red (no se pudieron leer las reglas de UFW).',
+            $result->message
+        );
         $this->assertSame(['80/tcp', '51330/tcp'], array_slice($result->details, 0, 2));
         $this->assertStringContainsString('NOPASSWD: /usr/sbin/ufw status verbose', $result->details[3]);
     }
 
+    /**
+     * Sin puertos expuestos el estado es correcto.
+     *
+     * @return void
+     */
     public function test_no_exposed_listeners_is_ok(): void
     {
         Process::fake([self::command('ss -tlnH') => Process::result("LISTEN 0 511 127.0.0.1:8787 0.0.0.0:*\n")]);
@@ -276,11 +436,18 @@ class SecurityChecksTest extends TestCase
         $this->assertSame('Ningún servicio escucha fuera del equipo.', $result->message);
     }
 
+    /**
+     * Un kernel instalado más nuevo que el actual exige reiniciar.
+     *
+     * @return void
+     */
     public function test_newer_installed_kernel_requires_reboot(): void
     {
         $inspector = $this->inspector();
         $inspector->shouldReceive('runningKernel')->andReturn('7.0.0-9-generic');
-        $inspector->shouldReceive('glob')->with('/boot/vmlinuz-*')->andReturn(['/boot/vmlinuz-7.0.0-9-generic', '/boot/vmlinuz-7.0.0-10-generic']);
+        $inspector->shouldReceive('glob')
+            ->with('/boot/vmlinuz-*')
+            ->andReturn(['/boot/vmlinuz-7.0.0-9-generic', '/boot/vmlinuz-7.0.0-10-generic']);
 
         $result = (new RebootRequiredCheck($inspector))->run();
 
@@ -288,9 +455,16 @@ class SecurityChecksTest extends TestCase
         $this->assertContains('Kernel instalado más reciente: 7.0.0-10-generic', $result->details);
     }
 
+    /**
+     * Las aplicaciones Snap pendientes se listan como advertencia.
+     *
+     * @return void
+     */
     public function test_snap_lists_pending_refreshes(): void
     {
-        Process::fake([self::command('snap refresh --list') => Process::result("Name     Version  Rev  Size  Publisher  Notes\nfirefox  140.0    1    90MB  mozilla    -\n")]);
+        Process::fake([self::command('snap refresh --list') => Process::result(
+            "Name     Version  Rev  Size  Publisher  Notes\nfirefox  140.0    1    90MB  mozilla    -\n"
+        )]);
 
         $result = (new SnapUpdatesCheck($this->inspector(commands: ['snap'])))->run();
 
@@ -298,6 +472,11 @@ class SecurityChecksTest extends TestCase
         $this->assertSame(['firefox'], $result->details);
     }
 
+    /**
+     * El bloqueo de pantalla desactivado es crítico.
+     *
+     * @return void
+     */
     public function test_screen_lock_disabled_is_critical(): void
     {
         Process::fake([

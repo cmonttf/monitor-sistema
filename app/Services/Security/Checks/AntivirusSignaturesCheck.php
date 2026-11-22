@@ -10,27 +10,53 @@ use Throwable;
  * Antigüedad de las firmas del antivirus ClamAV.
  *
  * @package App\Services\Security\Checks
+ * @author  Camilo Montt <cmonttf@gmail.com>
  */
 class AntivirusSignaturesCheck extends SystemCheck
 {
+    /**
+     * Días de antigüedad de las firmas a partir de los cuales se muestra una advertencia.
+     */
     private const int WARNING_DAYS = 2;
 
+    /**
+     * Días de antigüedad de las firmas a partir de los cuales el estado es crítico.
+     */
     private const int CRITICAL_DAYS = 7;
 
+    /**
+     * Nombre visible del chequeo en el panel.
+     *
+     * @return string Nombre del chequeo.
+     */
     public function name(): string
     {
         return 'Firmas del antivirus (ClamAV)';
     }
 
+    /**
+     * Categoría del panel en la que se agrupa el chequeo.
+     *
+     * @return string Nombre de la categoría.
+     */
     public function category(): string
     {
         return 'Protección';
     }
 
+    /**
+     * Lee la fecha de las firmas desde `clamscan --version` y la clasifica según su antigüedad;
+     * advierte si ClamAV no está instalado.
+     *
+     * @return CheckResult Estado, resumen y detalles del chequeo.
+     */
     public function run(): CheckResult
     {
         if (! $this->system->hasCommand('clamscan')) {
-            return CheckResult::warning('No hay antivirus ClamAV instalado.', ['sudo apt install clamav clamav-freshclam']);
+            return CheckResult::warning(
+                'No hay antivirus ClamAV instalado.',
+                ['sudo apt install clamav clamav-freshclam']
+            );
         }
 
         $version = trim($this->system->run(['clamscan', '--version'])->output());
@@ -54,8 +80,14 @@ class AntivirusSignaturesCheck extends SystemCheck
         ];
 
         return match (true) {
-            $days > self::CRITICAL_DAYS => CheckResult::critical("Las firmas tienen {$days} días de antigüedad.", $details),
-            $days > self::WARNING_DAYS => CheckResult::warning("Las firmas tienen {$days} días de antigüedad.", $details),
+            $days > self::CRITICAL_DAYS => CheckResult::critical(
+                "Las firmas tienen {$days} días de antigüedad.",
+                $details
+            ),
+            $days > self::WARNING_DAYS => CheckResult::warning(
+                "Las firmas tienen {$days} días de antigüedad.",
+                $details
+            ),
             default => CheckResult::ok('Firmas actualizadas ' . $signedAt->diffForHumans() . '.', $details),
         };
     }

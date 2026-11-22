@@ -14,22 +14,25 @@ use Illuminate\Support\Sleep;
  * Espera a que el servidor del monitor responda y abre el panel en el navegador.
  *
  * @package App\Console\Commands
+ * @author  Camilo Montt <cmonttf@gmail.com>
  */
 #[Signature('monitor:open {--wait=60 : Segundos máximos de espera al servidor}')]
 #[Description('Abre el monitor de seguridad en el navegador predeterminado')]
 class OpenDashboardCommand extends Command
 {
     /**
-     * Ejecuta el comando.
+     * Espera a que el servidor del monitor responda y abre el panel con xdg-open, desacoplado
+     * del proceso para que el navegador no quede atado al comando.
      *
-     * @return int
+     * @return int Código de salida: éxito, o fallo si el servidor no respondió a tiempo.
      */
     public function handle(): int
     {
         $baseUrl = 'http://' . config('security-monitor.host') . ':' . config('security-monitor.port');
 
         if (! $this->waitForServer($baseUrl, (int) $this->option('wait'))) {
-            $this->components->error("El monitor no responde en {$baseUrl}. Revisa: systemctl --user status " . InstallAutostartCommand::SERVICE_NAME);
+            $this->components->error("El monitor no responde en {$baseUrl}. Revisa: systemctl --user status "
+                . InstallAutostartCommand::SERVICE_NAME);
 
             return self::FAILURE;
         }
@@ -40,7 +43,12 @@ class OpenDashboardCommand extends Command
     }
 
     /**
-     * @return bool
+     * Consulta /up una vez por segundo hasta que el servidor responda.
+     *
+     * @param string $baseUrl URL base del monitor.
+     * @param int    $seconds Segundos máximos de espera.
+     *
+     * @return bool true si el servidor respondió dentro del plazo.
      */
     private function waitForServer(string $baseUrl, int $seconds): bool
     {

@@ -12,15 +12,17 @@ use Symfony\Component\Process\ExecutableFinder;
  * para que los chequeos sean fáciles de probar con dobles.
  *
  * @package App\Services\Security
+ * @author  Camilo Montt <cmonttf@gmail.com>
  */
 class SystemInspector
 {
     /**
-     * Ejecuta un comando con salida en inglés (para poder interpretarla).
+     * Ejecuta un comando con salida en inglés (LANG=C) para poder interpretarla.
      *
-     * @param  list<string>  $command
-     * @param  int  $timeout  Segundos máximos de ejecución.
-     * @return ProcessResult
+     * @param list<string> $command Comando y argumentos, sin pasar por la shell.
+     * @param int          $timeout Segundos máximos de ejecución.
+     *
+     * @return ProcessResult Resultado del proceso.
      */
     public function run(array $command, int $timeout = 15): ProcessResult
     {
@@ -30,9 +32,11 @@ class SystemInspector
     }
 
     /**
-     * Indica si un ejecutable está disponible en el PATH o en sbin.
+     * Indica si un ejecutable está disponible en el PATH o en /usr/sbin y /sbin.
      *
-     * @return bool
+     * @param string $binary Nombre del ejecutable.
+     *
+     * @return bool true si se encontró.
      */
     public function hasCommand(string $binary): bool
     {
@@ -40,9 +44,11 @@ class SystemInspector
     }
 
     /**
-     * Estado de una unidad systemd (active, inactive, failed...).
+     * Obtiene el estado de una unidad systemd con `systemctl is-active`.
      *
-     * @return string
+     * @param string $unit Nombre de la unidad.
+     *
+     * @return string Estado (active, inactive, failed...) o "unknown" si no hubo respuesta.
      */
     public function serviceState(string $unit): string
     {
@@ -50,7 +56,11 @@ class SystemInspector
     }
 
     /**
-     * @return bool
+     * Indica si existe un archivo regular.
+     *
+     * @param string $path Ruta del archivo.
+     *
+     * @return bool true si existe.
      */
     public function fileExists(string $path): bool
     {
@@ -58,9 +68,11 @@ class SystemInspector
     }
 
     /**
-     * Lee un archivo; retorna null si no existe o no es legible.
+     * Lee el contenido de un archivo.
      *
-     * @return string|null
+     * @param string $path Ruta del archivo.
+     *
+     * @return string|null Contenido, o null si no existe o no es legible.
      */
     public function readFile(string $path): ?string
     {
@@ -74,9 +86,11 @@ class SystemInspector
     }
 
     /**
-     * Fecha de última modificación de un archivo.
+     * Obtiene la fecha de última modificación de un archivo o directorio.
      *
-     * @return CarbonImmutable|null
+     * @param string $path Ruta del archivo o directorio.
+     *
+     * @return CarbonImmutable|null Fecha en la zona horaria de la aplicación, o null si no existe.
      */
     public function modifiedAt(string $path): ?CarbonImmutable
     {
@@ -90,7 +104,11 @@ class SystemInspector
     }
 
     /**
-     * @return list<string>
+     * Lista las rutas que coinciden con un patrón.
+     *
+     * @param string $pattern Patrón de glob, por ejemplo /boot/vmlinuz-*.
+     *
+     * @return list<string> Rutas encontradas (vacía si no hay coincidencias).
      */
     public function glob(string $pattern): array
     {
@@ -98,9 +116,9 @@ class SystemInspector
     }
 
     /**
-     * Versión del kernel en ejecución.
+     * Obtiene la versión del kernel en ejecución.
      *
-     * @return string
+     * @return string Versión, por ejemplo 7.0.0-44-generic.
      */
     public function runningKernel(): string
     {

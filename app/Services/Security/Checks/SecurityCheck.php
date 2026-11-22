@@ -8,6 +8,7 @@ use App\Services\Security\CheckResult;
  * Contrato de un chequeo de seguridad mostrado en el monitor.
  *
  * @package App\Services\Security\Checks
+ * @author  Camilo Montt <cmonttf@gmail.com>
  */
 interface SecurityCheck
 {

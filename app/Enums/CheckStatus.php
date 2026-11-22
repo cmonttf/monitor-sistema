@@ -6,6 +6,7 @@ namespace App\Enums;
  * Estado resultante de un chequeo de seguridad.
  *
  * @package App\Enums
+ * @author  Camilo Montt <cmonttf@gmail.com>
  */
 enum CheckStatus: string
 {

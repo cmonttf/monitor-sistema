@@ -8,6 +8,7 @@ use App\Enums\CheckStatus;
  * Resultado inmutable de un chequeo de seguridad.
  *
  * @package App\Services\Security
+ * @author  Camilo Montt <cmonttf@gmail.com>
  */
 final readonly class CheckResult
 {
@@ -19,9 +20,11 @@ final readonly class CheckResult
     public array $details;
 
     /**
-     * @param CheckStatus  $status  Estado del chequeo.
-     * @param string  $message  Resumen en una línea.
-     * @param array<array-key, string>  $details  Información adicional; se reindexa como lista.
+     * Crea el resultado de un chequeo.
+     *
+     * @param CheckStatus              $status  Estado del chequeo.
+     * @param string                   $message Resumen en una línea.
+     * @param array<array-key, string> $details Información adicional; se reindexa como lista.
      */
     public function __construct(
         public CheckStatus $status,
@@ -32,8 +35,12 @@ final readonly class CheckResult
     }
 
     /**
-     * @param  array<array-key, string>  $details
-     * @return self
+     * Crea un resultado correcto.
+     *
+     * @param string                   $message Resumen en una línea.
+     * @param array<array-key, string> $details Información adicional.
+     *
+     * @return self Resultado con estado ok.
      */
     public static function ok(string $message, array $details = []): self
     {
@@ -41,8 +48,12 @@ final readonly class CheckResult
     }
 
     /**
-     * @param  array<array-key, string>  $details
-     * @return self
+     * Crea un resultado de advertencia.
+     *
+     * @param string                   $message Resumen en una línea.
+     * @param array<array-key, string> $details Información adicional.
+     *
+     * @return self Resultado con estado warning.
      */
     public static function warning(string $message, array $details = []): self
     {
@@ -50,8 +61,12 @@ final readonly class CheckResult
     }
 
     /**
-     * @param  array<array-key, string>  $details
-     * @return self
+     * Crea un resultado crítico.
+     *
+     * @param string                   $message Resumen en una línea.
+     * @param array<array-key, string> $details Información adicional.
+     *
+     * @return self Resultado con estado critical.
      */
     public static function critical(string $message, array $details = []): self
     {
@@ -59,8 +74,12 @@ final readonly class CheckResult
     }
 
     /**
-     * @param  array<array-key, string>  $details
-     * @return self
+     * Crea un resultado sin datos.
+     *
+     * @param string                   $message Resumen en una línea.
+     * @param array<array-key, string> $details Información adicional.
+     *
+     * @return self Resultado con estado unknown.
      */
     public static function unknown(string $message, array $details = []): self
     {

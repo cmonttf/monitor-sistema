@@ -10,13 +10,21 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
+/**
+ * Usuario de la aplicación (modelo base de Laravel; el monitor no usa autenticación).
+ *
+ * @package App\Models
+ * @author  Camilo Montt <cmonttf@gmail.com>
+ */
 #[Fillable(['name', 'email', 'password'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
 {
     /**
- * @use HasFactory<UserFactory>
-*/
+     * Fábrica de modelos para pruebas y seeders.
+     *
+     * @use HasFactory<UserFactory>
+     */
     use HasFactory;
     use Notifiable;
 

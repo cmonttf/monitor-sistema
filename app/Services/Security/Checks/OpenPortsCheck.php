@@ -10,23 +10,46 @@ use App\Services\Security\UfwStatus;
  * para avisar sólo de los que realmente son alcanzables desde la red.
  *
  * @package App\Services\Security\Checks
+ * @author  Camilo Montt <cmonttf@gmail.com>
  */
 class OpenPortsCheck extends SystemCheck
 {
+    /**
+     * Archivo de sudoers que permite al monitor leer el estado de UFW sin contraseña.
+     */
     public const string SUDOERS_FILE = '/etc/sudoers.d/monitor-seguridad';
 
+    /**
+     * Comando de sólo lectura que entrega el estado y las reglas de UFW.
+     */
     public const array UFW_COMMAND = ['/usr/sbin/ufw', 'status', 'verbose'];
 
+    /**
+     * Nombre visible del chequeo en el panel.
+     *
+     * @return string Nombre del chequeo.
+     */
     public function name(): string
     {
         return 'Puertos abiertos a la red';
     }
 
+    /**
+     * Categoría del panel en la que se agrupa el chequeo.
+     *
+     * @return string Nombre de la categoría.
+     */
     public function category(): string
     {
         return 'Red';
     }
 
+    /**
+     * Lista los puertos TCP expuestos con `ss` y los evalúa contra las reglas de UFW: advierte si alguno
+     * es accesible desde la red, o si no se pudieron leer las reglas.
+     *
+     * @return CheckResult Estado, resumen y detalles del chequeo.
+     */
     public function run(): CheckResult
     {
         $result = $this->system->run(['ss', '-tlnH']);
@@ -46,7 +69,10 @@ class OpenPortsCheck extends SystemCheck
         if ($firewall === null) {
             return CheckResult::warning(
                 count($listeners) . ' puertos TCP escuchan en la red (no se pudieron leer las reglas de UFW).',
-                [...array_map(fn (int $port): string => "{$port}/tcp", array_keys($listeners)), ...$this->sudoersHint()],
+                [
+                    ...array_map(fn (int $port): string => "{$port}/tcp", array_keys($listeners)),
+                    ...$this->sudoersHint(),
+                ]
             );
         }
 
@@ -65,16 +91,24 @@ class OpenPortsCheck extends SystemCheck
         }
 
         if ($open !== []) {
-            return CheckResult::warning(count($open) . ' puertos son accesibles desde la red a través del cortafuegos.', [...$open, ...$blocked]);
+            return CheckResult::warning(
+                count($open) . ' puertos son accesibles desde la red a través del cortafuegos.',
+                [...$open, ...$blocked]
+            );
         }
 
-        return CheckResult::ok(count($blocked) . ' servicios escuchan en la red, pero el cortafuegos los bloquea.', $blocked);
+        return CheckResult::ok(
+            count($blocked) . ' servicios escuchan en la red, pero el cortafuegos los bloquea.',
+            $blocked
+        );
     }
 
     /**
-     * Puertos expuestos y familias de red en que escuchan (false = IPv4, true = IPv6).
+     * Extrae de la salida de `ss` los puertos que escuchan fuera de la interfaz local.
      *
-     * @return array<int, list<bool>>
+     * @param string $output Salida de `ss -tlnH`.
+     *
+     * @return array<int, list<bool>> Puerto => familias en que escucha (false = IPv4, true = IPv6).
      */
     private function exposedListeners(string $output): array
     {
@@ -110,7 +144,9 @@ class OpenPortsCheck extends SystemCheck
     }
 
     /**
-     * @return UfwStatus|null
+     * Lee el estado de UFW con `sudo -n`, sin pedir contraseña.
+     *
+     * @return UfwStatus|null Estado interpretado, o null si falta el permiso o la salida no se reconoce.
      */
     private function firewallStatus(): ?UfwStatus
     {
@@ -120,14 +156,17 @@ class OpenPortsCheck extends SystemCheck
     }
 
     /**
-     * Perfiles de aplicación de UFW ("Apache Full" => "80,443/tcp").
+     * Lee los perfiles de aplicación de UFW desde /etc/ufw/applications.d.
      *
-     * @return array<string, string>
+     * @return array<string, string> Perfil => especificación de puertos ("Apache Full" => "80,443/tcp").
      */
     private function appProfiles(): array
     {
         $profiles = [];
-        $files = [...$this->system->glob('/etc/ufw/applications.d/*'), ...$this->system->glob('/etc/ufw/applications.d/*/*')];
+        $files = [
+            ...$this->system->glob('/etc/ufw/applications.d/*'),
+            ...$this->system->glob('/etc/ufw/applications.d/*/*'),
+        ];
 
         foreach ($files as $file) {
             $sections = parse_ini_string($this->system->readFile($file) ?? '', true, INI_SCANNER_RAW) ?: [];
@@ -143,7 +182,9 @@ class OpenPortsCheck extends SystemCheck
     }
 
     /**
-     * @return list<string>
+     * Arma las instrucciones para crear la regla de sudoers con el usuario actual.
+     *
+     * @return list<string> Explicación y comando a ejecutar.
      */
     private function sudoersHint(): array
     {
@@ -152,7 +193,8 @@ class OpenPortsCheck extends SystemCheck
 
         return [
             'Para cruzar con UFW, permite al monitor leer el estado del cortafuegos (una sola vez):',
-            "echo '{$user} ALL=(root) NOPASSWD: {$command}' | sudo tee " . self::SUDOERS_FILE . ' && sudo chmod 440 ' . self::SUDOERS_FILE,
+            "echo '{$user} ALL=(root) NOPASSWD: {$command}' | sudo tee " . self::SUDOERS_FILE
+                . ' && sudo chmod 440 ' . self::SUDOERS_FILE,
         ];
     }
 }

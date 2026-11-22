@@ -11,20 +11,23 @@ use Illuminate\View\View;
  * Panel de estado de seguridad del equipo.
  *
  * @package App\Http\Controllers
+ * @author  Camilo Montt <cmonttf@gmail.com>
  */
 class SecurityDashboardController extends Controller
 {
     /**
-     * @param SecurityMonitor  $monitor  Servicio que ejecuta los chequeos.
+     * Recibe el servicio que ejecuta los chequeos.
+     *
+     * @param SecurityMonitor $monitor Servicio de monitoreo.
      */
     public function __construct(private SecurityMonitor $monitor)
     {
     }
 
     /**
-     * Muestra el panel.
+     * Muestra el panel con el último reporte y la frecuencia de actualización del navegador.
      *
-     * @return View
+     * @return View Vista del panel.
      */
     public function index(): View
     {
@@ -35,9 +38,11 @@ class SecurityDashboardController extends Controller
     }
 
     /**
-     * Estado actual en JSON; con ?refresh=1 vuelve a ejecutar los chequeos.
+     * Entrega el reporte en JSON; con ?refresh=1 vuelve a ejecutar los chequeos.
      *
-     * @return JsonResponse
+     * @param Request $request Solicitud HTTP.
+     *
+     * @return JsonResponse Reporte del panel.
      */
     public function status(Request $request): JsonResponse
     {

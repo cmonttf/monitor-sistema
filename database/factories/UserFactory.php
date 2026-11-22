@@ -8,6 +8,8 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 
 /**
+ * Fábrica de usuarios para pruebas y seeders.
+ *
  * @extends Factory<User>
  */
 class UserFactory extends Factory
@@ -35,6 +37,8 @@ class UserFactory extends Factory
 
     /**
      * Indicate that the model's email address should be unverified.
+     *
+     * @return static
      */
     public function unverified(): static
     {

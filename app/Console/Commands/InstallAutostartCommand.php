@@ -14,19 +14,26 @@ use Illuminate\Support\Facades\Process;
  * autoarranque del escritorio que abre el panel en el navegador al iniciar sesión.
  *
  * @package App\Console\Commands
+ * @author  Camilo Montt <cmonttf@gmail.com>
  */
 #[Signature('monitor:autostart {--remove : Desinstala el arranque automático}')]
 #[Description('Configura el monitor para que se inicie y abra en el navegador al encender el equipo')]
 class InstallAutostartCommand extends Command
 {
+    /**
+     * Nombre de la unidad systemd de usuario que levanta el servidor del monitor.
+     */
     public const string SERVICE_NAME = 'monitor-seguridad.service';
 
+    /**
+     * Nombre del archivo .desktop de autoarranque y del lanzador del menú.
+     */
     public const string DESKTOP_NAME = 'monitor-seguridad.desktop';
 
     /**
-     * Ejecuta el comando.
+     * Instala o, con --remove, desinstala el arranque automático.
      *
-     * @return int
+     * @return int Código de salida.
      */
     public function handle(): int
     {
@@ -34,7 +41,10 @@ class InstallAutostartCommand extends Command
     }
 
     /**
-     * @return int
+     * Escribe la unidad systemd, la entrada de autoarranque y el lanzador, y habilita y reinicia
+     * el servicio.
+     *
+     * @return int Código de salida.
      */
     private function install(): int
     {
@@ -62,7 +72,9 @@ class InstallAutostartCommand extends Command
     }
 
     /**
-     * @return int
+     * Deshabilita y detiene el servicio y elimina los archivos instalados.
+     *
+     * @return int Código de salida.
      */
     private function uninstall(): int
     {
@@ -78,7 +90,9 @@ class InstallAutostartCommand extends Command
     }
 
     /**
-     * @return string
+     * Genera la unidad systemd que ejecuta `artisan serve` en la dirección configurada.
+     *
+     * @return string Contenido de la unidad.
      */
     private function serviceUnit(): string
     {
@@ -107,7 +121,9 @@ class InstallAutostartCommand extends Command
     }
 
     /**
-     * @return string
+     * Genera la entrada de escritorio que ejecuta `artisan monitor:open` al iniciar sesión.
+     *
+     * @return string Contenido del archivo .desktop.
      */
     private function desktopEntry(): string
     {
@@ -130,8 +146,11 @@ class InstallAutostartCommand extends Command
     }
 
     /**
-     * @param  string  ...$arguments
-     * @return bool
+     * Ejecuta systemctl sobre el gestor de servicios del usuario.
+     *
+     * @param string ...$arguments Argumentos para systemctl.
+     *
+     * @return bool true si el comando terminó correctamente.
      */
     private function systemctl(string ...$arguments): bool
     {
@@ -139,7 +158,9 @@ class InstallAutostartCommand extends Command
     }
 
     /**
-     * @return string
+     * Construye la URL del panel a partir de la configuración.
+     *
+     * @return string URL del panel.
      */
     private function dashboardUrl(): string
     {
@@ -147,7 +168,9 @@ class InstallAutostartCommand extends Command
     }
 
     /**
-     * @return string
+     * Ruta de la unidad systemd de usuario.
+     *
+     * @return string Ruta absoluta.
      */
     private function servicePath(): string
     {
@@ -155,7 +178,9 @@ class InstallAutostartCommand extends Command
     }
 
     /**
-     * @return string
+     * Ruta de la entrada de autoarranque del escritorio.
+     *
+     * @return string Ruta absoluta.
      */
     private function autostartPath(): string
     {
@@ -163,7 +188,9 @@ class InstallAutostartCommand extends Command
     }
 
     /**
-     * @return string
+     * Ruta del lanzador en el menú de aplicaciones (respeta XDG_DATA_HOME).
+     *
+     * @return string Ruta absoluta.
      */
     private function launcherPath(): string
     {
@@ -173,7 +200,9 @@ class InstallAutostartCommand extends Command
     }
 
     /**
-     * @return string
+     * Directorio de configuración del usuario (respeta XDG_CONFIG_HOME).
+     *
+     * @return string Ruta absoluta.
      */
     private function configHome(): string
     {
@@ -181,7 +210,9 @@ class InstallAutostartCommand extends Command
     }
 
     /**
-     * @return string
+     * Directorio personal del usuario.
+     *
+     * @return string Ruta absoluta.
      */
     private function home(): string
     {

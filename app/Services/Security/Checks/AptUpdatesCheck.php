@@ -9,21 +9,41 @@ use Illuminate\Support\Str;
  * Paquetes APT pendientes de actualizar, distinguiendo los de seguridad.
  *
  * @package App\Services\Security\Checks
+ * @author  Camilo Montt <cmonttf@gmail.com>
  */
 class AptUpdatesCheck extends SystemCheck
 {
+    /**
+     * Cantidad máxima de paquetes listados en los detalles de la tarjeta.
+     */
     private const int MAX_LISTED = 25;
 
+    /**
+     * Nombre visible del chequeo en el panel.
+     *
+     * @return string Nombre del chequeo.
+     */
     public function name(): string
     {
         return 'Paquetes del sistema (APT)';
     }
 
+    /**
+     * Categoría del panel en la que se agrupa el chequeo.
+     *
+     * @return string Nombre de la categoría.
+     */
     public function category(): string
     {
         return 'Actualizaciones';
     }
 
+    /**
+     * Consulta `apt list --upgradable`: es crítico si hay actualizaciones de seguridad y
+     * advertencia si sólo hay actualizaciones normales.
+     *
+     * @return CheckResult Estado, resumen y detalles del chequeo.
+     */
     public function run(): CheckResult
     {
         if (! $this->system->hasCommand('apt')) {

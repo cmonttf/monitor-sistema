@@ -8,21 +8,41 @@ use App\Services\Security\CheckResult;
  * Bloqueo automático de pantalla en GNOME.
  *
  * @package App\Services\Security\Checks
+ * @author  Camilo Montt <cmonttf@gmail.com>
  */
 class ScreenLockCheck extends SystemCheck
 {
+    /**
+     * Segundos máximos de inactividad recomendados antes de bloquear la pantalla.
+     */
     private const int MAX_IDLE_SECONDS = 900;
 
+    /**
+     * Nombre visible del chequeo en el panel.
+     *
+     * @return string Nombre del chequeo.
+     */
     public function name(): string
     {
         return 'Bloqueo de pantalla';
     }
 
+    /**
+     * Categoría del panel en la que se agrupa el chequeo.
+     *
+     * @return string Nombre de la categoría.
+     */
     public function category(): string
     {
         return 'Sistema';
     }
 
+    /**
+     * Lee de GNOME si el bloqueo está activo y tras cuánto tiempo de inactividad se aplica;
+     * desactivado es crítico y más de 15 minutos es advertencia.
+     *
+     * @return CheckResult Estado, resumen y detalles del chequeo.
+     */
     public function run(): CheckResult
     {
         if (! $this->system->hasCommand('gsettings')) {
