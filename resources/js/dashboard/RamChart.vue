@@ -207,11 +207,11 @@ function onKeydown(event) {
             </template>
         </svg>
 
-        <p v-if="visible.length < 2" class="chart-empty">Recolectando datos…</p>
+        <p v-if="visible.length < 2" class="chart-empty text-body-secondary">Recolectando datos…</p>
 
-        <div v-if="hovered" class="chart-tooltip" :style="tooltipStyle">
-            <div class="tooltip-time">{{ formatTime(hovered.t) }}</div>
-            <div class="tooltip-value">
+        <div v-if="hovered" class="chart-tooltip card shadow small px-2 py-1" :style="tooltipStyle">
+            <div class="text-body-secondary">{{ formatTime(hovered.t) }}</div>
+            <div class="fw-semibold">
                 En uso: {{ formatBytes(hovered.used) }} ({{ Math.round((hovered.used / hovered.total) * 100) }} %)
             </div>
             <div>Disponible: {{ formatBytes(hovered.available) }}</div>

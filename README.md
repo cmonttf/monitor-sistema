@@ -75,7 +75,9 @@ La sección **Recursos** se actualiza sin recargar la página (cada 2 segundos e
 - **Espacio en disco:** espacio libre y medidor por cada disco real.
 - **RAM en uso, en tiempo real:** gráfico de los últimos 1, 5 o 15 minutos. Al pasar el cursor (o con las flechas del teclado, con el gráfico enfocado) muestra la hora y los valores de cada muestra; debajo están el mínimo, el promedio y el máximo, y una tabla con las últimas muestras.
 
-El historial del gráfico se guarda en el navegador mientras el panel está abierto. Esta sección está hecha con Vue 3.
+El historial del gráfico se guarda en el navegador mientras el panel está abierto.
+
+La interfaz está hecha con **Vue 3** y **Bootstrap 5.3**, y sigue el modo claro u oscuro del sistema.
 
 ## Requisitos
 
@@ -171,13 +173,14 @@ Un chequeo que lanza una excepción aparece como ⚪ sin detener a los demás.
 | `app/Services/Security/ResourceSampler.php` | Lee el uso de memoria y discos (`/proc/meminfo` y `df`, o CIM en Windows) |
 | `app/Services/Security/WindowsAutostart.php` | Arranque automático en Windows (script y accesos directos) |
 | `app/Http/Controllers/SecurityDashboardController.php` | Panel (`/`), estado en JSON (`/estado`, `?refresh=1` para forzar) y muestra en vivo (`/recursos`) |
-| `resources/views/security/dashboard.blade.php` | Interfaz del panel |
-| `resources/js/resources-monitor/` | Componentes Vue del monitor de recursos en tiempo real |
+| `resources/views/security/dashboard.blade.php` | Página que monta la interfaz con su configuración y el reporte inicial |
+| `resources/js/dashboard/` | Componentes Vue del panel (tarjetas, recursos en tiempo real, gráfico) |
+| `resources/css/dashboard.css` | Estilos propios sobre Bootstrap (franjas de estado, medidores y gráfico) |
 | `app/Console/Commands/` | `monitor:autostart` y `monitor:open` |
 
 ## Desarrollo de la interfaz
 
-Tras cambiar los componentes Vue, recompila con `npm run build` (o usa `npm run dev` mientras desarrollas).
+Tras cambiar los componentes Vue o los estilos, recompila con `npm run build` (o usa `npm run dev` mientras desarrollas).
 
 ## Calidad de código
 

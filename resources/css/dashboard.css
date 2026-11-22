@@ -1,0 +1,126 @@
+/*
+ * Estilos propios del panel, sobre Bootstrap 5.3. Usan las variables de Bootstrap para respetar el modo
+ * claro y oscuro (data-bs-theme).
+ */
+
+:root {
+    /* Color de la serie del gráfico de RAM y de los medidores, validado contra la superficie de cada modo. */
+    --series-color: #2a78d6;
+    --series-track: #cde2fb;
+}
+
+[data-bs-theme="dark"] {
+    --series-color: #3987e5;
+    --series-track: #1c3557;
+}
+
+body {
+    background-color: var(--bs-tertiary-bg);
+}
+
+.section-title {
+    margin: 2rem 0 0.75rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--bs-secondary-color);
+}
+
+/* Tarjetas de chequeo: franja izquierda con el color del estado. */
+.check-card {
+    border-left-width: 4px;
+}
+
+.check-card-success { border-left-color: var(--bs-success); }
+.check-card-warning { border-left-color: var(--bs-warning); }
+.check-card-danger { border-left-color: var(--bs-danger); }
+.check-card-secondary { border-left-color: var(--bs-secondary); }
+
+.card-content {
+    margin-left: 2.5rem;
+}
+
+.status-icon {
+    display: inline-grid;
+    flex: none;
+    place-items: center;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 50%;
+    font-weight: 700;
+}
+
+.status-icon-lg {
+    width: 2.75rem;
+    height: 2.75rem;
+    font-size: 1.3rem;
+}
+
+.command-text {
+    white-space: normal;
+    overflow-wrap: anywhere;
+    color: var(--bs-body-color);
+}
+
+/* Medidores: el relleno lleva la severidad y la pista es un tono más claro del mismo color. */
+.meter {
+    height: 0.5rem;
+}
+
+.meter-normal { background-color: var(--series-track); }
+.meter-normal .progress-bar { background-color: var(--series-color); }
+.meter-warning { background-color: var(--bs-warning-bg-subtle); }
+.meter-warning .progress-bar { background-color: var(--bs-warning); }
+.meter-critical { background-color: var(--bs-danger-bg-subtle); }
+.meter-critical .progress-bar { background-color: var(--bs-danger); }
+
+/* Gráfico de RAM en tiempo real (SVG). */
+.chart {
+    position: relative;
+    min-height: 220px;
+    margin-top: 0.75rem;
+    outline-offset: 4px;
+}
+
+.chart svg {
+    display: block;
+    overflow: visible;
+}
+
+.chart text {
+    font-size: 12px;
+    fill: var(--bs-secondary-color);
+}
+
+.chart .grid { stroke: var(--bs-border-color); stroke-width: 1; }
+.chart .area { fill: var(--series-color); opacity: 0.1; }
+.chart .line { fill: none; stroke: var(--series-color); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.chart .end-dot,
+.chart .cross-dot { fill: var(--series-color); stroke: var(--bs-body-bg); stroke-width: 2; }
+.chart .end-label { fill: var(--bs-body-color); font-weight: 600; }
+.chart .cross { stroke: var(--bs-secondary-color); stroke-width: 1; }
+
+.chart-empty {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    margin: 0;
+}
+
+.chart-tooltip {
+    position: absolute;
+    top: 8px;
+    pointer-events: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .alert-danger .status-icon-lg {
+        animation: pulse 1.6s ease-in-out infinite;
+    }
+}
+
+@keyframes pulse {
+    50% { transform: scale(1.12); }
+}

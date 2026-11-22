@@ -31,7 +31,8 @@ class SecurityDashboardTest extends TestCase
     }
 
     /**
-     * El panel se muestra y el contenido del reporte llega escapado (sin HTML inyectado).
+     * El panel entrega el contenedor de la interfaz con su configuración y el reporte inicial escapado
+     * (sin HTML inyectado).
      *
      * @return void
      */
@@ -42,8 +43,10 @@ class SecurityDashboardTest extends TestCase
         $response = $this->get(route('security.dashboard'));
 
         $response->assertOk();
-        $response->assertSee('Verificar ahora');
+        $response->assertSee('id="app"', false);
+        $response->assertSee('data-status-url="' . route('security.status') . '"', false);
         $response->assertSee('Chequeo de prueba');
+        $response->assertSee('Cortafuegos &lt;b&gt;apagado&lt;\/b&gt;', false);
         $response->assertDontSee('Cortafuegos <b>apagado</b>', false);
     }
 
