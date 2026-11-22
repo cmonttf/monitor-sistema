@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Services\Security\BlockedRequestLog;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\IpUtils;
@@ -35,7 +36,17 @@ class EnsureLocalAccess
     private const array LOOPBACK_RANGES = ['127.0.0.0/8', '::1'];
 
     /**
-     * Deja pasar la solicitud sólo si el host es local y el cliente es el propio equipo; si no, responde 403.
+     * Recibe el registro donde se anotan las solicitudes rechazadas.
+     *
+     * @param BlockedRequestLog $blockedRequests Registro de solicitudes rechazadas.
+     */
+    public function __construct(private BlockedRequestLog $blockedRequests)
+    {
+    }
+
+    /**
+     * Deja pasar la solicitud sólo si el host es local y el cliente es el propio equipo; si no, la registra
+     * y responde 403.
      *
      * @param Request                      $request Solicitud entrante.
      * @param Closure(Request): (Response) $next    Siguiente capa de la aplicación.
@@ -50,10 +61,12 @@ class EnsureLocalAccess
         $clientIp = $request->server('REMOTE_ADDR');
 
         if (! in_array($host, self::LOCAL_HOSTS, true)) {
+            $this->blockedRequests->record($request, 'host');
             abort(Response::HTTP_FORBIDDEN, 'El monitor sólo responde a 127.0.0.1 o localhost.');
         }
 
         if (! is_string($clientIp) || ! IpUtils::checkIp($clientIp, self::LOOPBACK_RANGES)) {
+            $this->blockedRequests->record($request, 'client');
             abort(Response::HTTP_FORBIDDEN, 'El monitor sólo acepta conexiones desde este equipo.');
         }
 

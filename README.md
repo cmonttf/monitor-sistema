@@ -60,6 +60,25 @@ En Windows el monitor corre **como usuario normal**, sin permisos de administrad
 | Red | Escritorio remoto (RDP) | 🔴 si está activo sin NLA, 🟠 si está activo |
 | | Puertos abiertos a la red | 🟠 si hay puertos expuestos con el firewall desactivado |
 
+### Detección de ataques
+
+| Chequeo | Linux | Windows | Cuándo alerta |
+|---|---|---|---|
+| Intentos de inicio de sesión (24 h) | Journal de autenticación (SSH y local) | Evento 4625 del registro de Seguridad (requiere administrador) | 🔴 si alguien entró tras 3+ fallos o una IP acumula 5+ fallos (fuerza bruta); 🟠 con fallos remotos aislados o 10+ fallos locales |
+| Escaneos y conexiones bloqueadas (24 h) | Registro de UFW o firewalld (se ignora el ruido multicast y broadcast) | `pfirewall.log` (requiere activar el registro y permisos de administrador) | 🔴 si una IP probó 10+ puertos distintos (escaneo); 🟠 si insistió 20+ veces |
+| Malware detectado (7 días) | Detecciones de ClamAV (clamd y escaneo al acceder) | Historial de Microsoft Defender | 🔴 con amenazas reales o activas; 🟠 si solo hubo archivos de prueba EICAR o amenazas ya neutralizadas |
+| Cambios en archivos críticos | Cuentas, sudoers, claves SSH autorizadas, cron, servicios, hosts, `ld.so.preload` | Administradores locales, claves Run, carpetas de inicio, tareas programadas, servicios automáticos, hosts | 🔴 si cambió un elemento sensible, hay una cuenta extra con UID 0 o existe `/etc/ld.so.preload`; 🟠 si cambiaron otros elementos |
+| Intentos de acceso al panel (24 h) | Solicitudes que el panel rechazó | Igual | 🟠 con intentos (por ejemplo, *DNS rebinding* desde una página web); 🔴 con 20+ |
+
+Las tarjetas que dan 🔴 incluyen los pasos de respuesta: bloquear la IP en el cortafuegos, instalar fail2ban, poner en cuarentena el archivo infectado o revisar las cuentas.
+
+El monitor de integridad registra una **línea base** la primera vez y desde entonces avisa de cualquier cambio. Las actualizaciones del sistema y la instalación de programas también cambian estos archivos; después de revisar los cambios, acéptalos como nueva línea base:
+
+```bash
+php artisan monitor:integrity            # muestra los cambios desde la línea base
+php artisan monitor:integrity --accept   # acepta el estado actual
+```
+
 ### Ambos sistemas
 
 | Categoría | Chequeo | Cuándo alerta |
@@ -137,7 +156,7 @@ Con **firewalld** no hace falta: sus reglas se consultan sin privilegios.
 
 ## Seguridad del panel
 
-El panel solo atiende al propio equipo: el servidor escucha en `127.0.0.1` y, además, cada solicitud debe usar el nombre `127.0.0.1`, `localhost` o `[::1]` y venir de una dirección de loopback; si no, responde 403. Esto impide que una página web maliciosa lea el estado del equipo mediante *DNS rebinding* (un dominio externo que pasa a resolver a `127.0.0.1`).
+El panel solo atiende al propio equipo: el servidor escucha en `127.0.0.1` y, además, cada solicitud debe usar el nombre `127.0.0.1`, `localhost` o `[::1]` y venir de una dirección de loopback; si no, responde 403 y registra el intento, que aparece en la tarjeta «Intentos de acceso al panel». Esto impide que una página web maliciosa lea el estado del equipo mediante *DNS rebinding* (un dominio externo que pasa a resolver a `127.0.0.1`).
 
 ## Configuración
 
@@ -176,11 +195,13 @@ Un chequeo que lanza una excepción aparece como ⚪ sin detener a los demás.
 | `app/Services/Security/UfwStatus.php`, `FirewalldStatus.php` | Evalúan los puertos contra las reglas de UFW o firewalld |
 | `app/Services/Security/ResourceSampler.php` | Lee el uso de memoria y discos (`/proc/meminfo` y `df`, o CIM en Windows) |
 | `app/Services/Security/WindowsAutostart.php` | Arranque automático en Windows (script y accesos directos) |
+| `app/Services/Security/IntegritySnapshot.php`, `IntegrityBaseline.php` | Huella de los elementos vigilados y línea base del monitor de integridad |
+| `app/Services/Security/BlockedRequestLog.php`, `app/Http/Middleware/EnsureLocalAccess.php` | Restricción del panel al propio equipo y registro de los intentos rechazados |
 | `app/Http/Controllers/SecurityDashboardController.php` | Panel (`/`), estado en JSON (`/estado`, `?refresh=1` para forzar) y muestra en vivo (`/recursos`) |
 | `resources/views/security/dashboard.blade.php` | Página que monta la interfaz con su configuración y el reporte inicial |
 | `resources/js/dashboard/` | Componentes Vue del panel (tarjetas, recursos en tiempo real, gráfico) |
 | `resources/css/dashboard.css` | Estilos propios sobre Bootstrap (franjas de estado, medidores y gráfico) |
-| `app/Console/Commands/` | `monitor:autostart` y `monitor:open` |
+| `app/Console/Commands/` | `monitor:autostart`, `monitor:open` y `monitor:integrity` |
 
 ## Desarrollo de la interfaz
 

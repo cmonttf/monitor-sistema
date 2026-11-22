@@ -92,6 +92,15 @@ return [
         Checks\WindowsUacCheck::class,
         Checks\WindowsRemoteDesktopCheck::class,
         Checks\WindowsOpenPortsCheck::class,
+        // Detección de ataques.
+        Checks\LoginFailuresCheck::class,
+        Checks\WindowsLoginFailuresCheck::class,
+        Checks\BlockedConnectionsCheck::class,
+        Checks\WindowsBlockedConnectionsCheck::class,
+        Checks\MalwareDetectionsCheck::class,
+        Checks\WindowsMalwareDetectionsCheck::class,
+        Checks\FileIntegrityCheck::class,
+        Checks\PanelAccessCheck::class,
         // Linux y Windows.
         Checks\MemoryCheck::class,
         Checks\DiskSpaceCheck::class,

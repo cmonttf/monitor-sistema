@@ -63,6 +63,16 @@ class SecurityMonitor
     }
 
     /**
+     * Descarta el reporte guardado en caché, para que la próxima consulta vuelva a ejecutar los chequeos.
+     *
+     * @return void
+     */
+    public function forgetCachedReport(): void
+    {
+        Cache::forget(self::CACHE_KEY);
+    }
+
+    /**
      * Ejecuta los chequeos configurados que aplican a la plataforma y arma el reporte con el estado global (el peor)
      * y el resumen por estado; un chequeo que falla no detiene a los demás.
      *

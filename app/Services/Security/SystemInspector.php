@@ -172,4 +172,41 @@ class SystemInspector
 
         return is_array($decoded) ? $decoded : null;
     }
+
+    /**
+     * Huella de un archivo para detectar cambios: el SHA-256 de su contenido si es legible, o su tamaño y
+     * fecha de modificación si sólo se pueden leer sus metadatos (por ejemplo /etc/shadow).
+     *
+     * @param string $path Ruta del archivo.
+     *
+     * @return string|null Huella, o null si el archivo no existe.
+     */
+    public function fingerprint(string $path): ?string
+    {
+        if (! is_file($path)) {
+            return null;
+        }
+
+        if (is_readable($path)) {
+            $hash = hash_file('sha256', $path);
+
+            if ($hash !== false) {
+                return "sha256:{$hash}";
+            }
+        }
+
+        $stat = stat($path);
+
+        return $stat === false ? 'sin-acceso' : "meta:{$stat['size']}:{$stat['mtime']}";
+    }
+
+    /**
+     * Directorio personal del usuario que ejecuta el monitor.
+     *
+     * @return string Ruta absoluta (vacía si no se pudo determinar).
+     */
+    public function homeDirectory(): string
+    {
+        return (string) (getenv('HOME') ?: getenv('USERPROFILE') ?: '');
+    }
 }
