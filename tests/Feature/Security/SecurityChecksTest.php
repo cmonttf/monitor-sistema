@@ -3,6 +3,7 @@
 namespace Tests\Feature\Security;
 
 use App\Enums\CheckStatus;
+use App\Services\Security\Checks\AntivirusDaemonCheck;
 use App\Services\Security\Checks\AntivirusSignaturesCheck;
 use App\Services\Security\Checks\AntivirusUpdaterCheck;
 use App\Services\Security\Checks\AptUpdatesCheck;
@@ -113,6 +114,34 @@ class SecurityChecksTest extends TestCase
         $result = (new AntivirusUpdaterCheck($this->inspector(commands: ['freshclam'], services: ['clamav-freshclam' => 'failed'])))->run();
 
         $this->assertSame(CheckStatus::Critical, $result->status);
+    }
+
+    /**
+     * @return array<string, array{string, CheckStatus}>
+     */
+    public static function daemonStates(): array
+    {
+        return [
+            'activo' => ['active', CheckStatus::Ok],
+            'cargando firmas' => ['activating', CheckStatus::Ok],
+            'fallido' => ['failed', CheckStatus::Critical],
+            'detenido' => ['inactive', CheckStatus::Warning],
+        ];
+    }
+
+    #[DataProvider('daemonStates')]
+    public function test_clamd_status_depends_on_service_state(string $state, CheckStatus $expected): void
+    {
+        $result = (new AntivirusDaemonCheck($this->inspector(commands: ['clamd'], services: ['clamav-daemon' => $state])))->run();
+
+        $this->assertSame($expected, $result->status);
+    }
+
+    public function test_missing_clamd_is_unknown(): void
+    {
+        $result = (new AntivirusDaemonCheck($this->inspector()))->run();
+
+        $this->assertSame(CheckStatus::Unknown, $result->status);
     }
 
     public function test_firewall_is_ok_only_when_enabled_and_running(): void

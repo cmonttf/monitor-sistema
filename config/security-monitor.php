@@ -47,6 +47,7 @@ return [
         Checks\FirewallCheck::class,
         Checks\AntivirusSignaturesCheck::class,
         Checks\AntivirusUpdaterCheck::class,
+        Checks\AntivirusDaemonCheck::class,
         Checks\AppArmorCheck::class,
         Checks\SecureBootCheck::class,
         Checks\DiskEncryptionCheck::class,
