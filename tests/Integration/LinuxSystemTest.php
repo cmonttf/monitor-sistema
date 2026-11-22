@@ -2,6 +2,8 @@
 
 namespace Tests\Integration;
 
+use App\Services\Security\AttackTimeline;
+use App\Services\Security\IntegritySnapshot;
 use App\Services\Security\Platform;
 use App\Services\Security\ResourceSampler;
 use App\Services\Security\SecurityMonitor;
@@ -59,5 +61,21 @@ class LinuxSystemTest extends TestCase
 
         $this->assertNotEmpty($report['checks']);
         $this->assertNotContains('Error al ejecutar el chequeo.', array_column($report['checks'], 'message'));
+    }
+
+    /**
+     * La toma de huellas encuentra los archivos vigilados y la línea de tiempo de ataques responde. Leer el
+     * journal depende de los permisos del usuario (grupo adm), así que no se exige en todos los equipos.
+     *
+     * @return void
+     */
+    public function test_integrity_and_attack_timeline_read_the_real_system(): void
+    {
+        $entries = app(IntegritySnapshot::class)->capture();
+        $timeline = app(AttackTimeline::class)->events(24);
+
+        $this->assertArrayHasKey('/etc/passwd', $entries);
+        $this->assertIsArray($timeline['events']);
+        $this->assertNotContains('panel', $timeline['unavailable']);
     }
 }

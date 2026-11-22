@@ -16,6 +16,8 @@ if (element) {
         hostname: data.hostname,
         statusUrl: data.statusUrl,
         resourcesUrl: data.resourcesUrl,
+        attacksUrl: data.attacksUrl,
+        attacksRefreshMs: Number(data.attacksRefreshMs),
         refreshMs: Number(data.refreshMs),
         resourcesRefreshMs: Number(data.resourcesRefreshMs),
         historyMs: Number(data.historyMs),

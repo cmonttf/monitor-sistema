@@ -3,6 +3,7 @@
 namespace Tests\Integration;
 
 use App\Enums\CheckStatus;
+use App\Services\Security\AttackTimeline;
 use App\Services\Security\Checks\SecurityCheck;
 use App\Services\Security\Checks\WindowsCheck;
 use App\Services\Security\Checks\WindowsFirewallCheck;
@@ -11,6 +12,7 @@ use App\Services\Security\Checks\WindowsRebootCheck;
 use App\Services\Security\Checks\WindowsRemoteDesktopCheck;
 use App\Services\Security\Checks\WindowsScreenLockCheck;
 use App\Services\Security\Checks\WindowsUacCheck;
+use App\Services\Security\IntegritySnapshot;
 use App\Services\Security\Platform;
 use App\Services\Security\ResourceSampler;
 use App\Services\Security\SecurityMonitor;
@@ -65,10 +67,17 @@ class WindowsSystemTest extends TestCase
     {
         $scripts = [];
 
-        foreach ([...self::windowsCheckClasses(), ResourceSampler::class] as $class) {
+        $classes = [
+            ...self::windowsCheckClasses(),
+            ResourceSampler::class,
+            IntegritySnapshot::class,
+            AttackTimeline::class,
+        ];
+
+        foreach ($classes as $class) {
             foreach ((new ReflectionClass($class))->getConstants() as $name => $value) {
                 if (is_string($value) && in_array($name, ['SCRIPT', 'WINDOWS_SCRIPT'], true)) {
-                    $scripts[class_basename($class)] = $value;
+                    $scripts[class_basename($class)] = str_replace('__HOURS__', '24', $value);
                 }
             }
         }
@@ -107,7 +116,7 @@ class WindowsSystemTest extends TestCase
             . '$errors | ForEach-Object { $_.Message }; exit @($errors).Count';
 
         $scripts = self::powershellScripts();
-        $this->assertGreaterThanOrEqual(11, count($scripts));
+        $this->assertGreaterThanOrEqual(17, count($scripts));
 
         foreach ($scripts as $origin => $script) {
             $result = Process::input($script)
@@ -171,5 +180,25 @@ class WindowsSystemTest extends TestCase
 
         $this->assertNotEmpty($report['checks']);
         $this->assertNotContains('Error al ejecutar el chequeo.', array_column($report['checks'], 'message'));
+    }
+
+    /**
+     * La toma de huellas lee los elementos vigilados y la línea de tiempo de ataques responde (los
+     * registros que exigen administrador quedan como sin datos, no como error).
+     *
+     * @return void
+     */
+    public function test_integrity_and_attack_timeline_read_the_real_system(): void
+    {
+        $entries = app(IntegritySnapshot::class)->capture();
+        $timeline = app(AttackTimeline::class)->events(24);
+
+        $this->assertNotEmpty($entries);
+        $this->assertArrayHasKey('Archivo hosts', $entries);
+        $this->assertNotContains(
+            'malware',
+            $timeline['unavailable'],
+            'Defender debería poder leerse sin administrador.'
+        );
     }
 }

@@ -170,19 +170,21 @@ class LoginFailuresCheck extends SystemCheck
         $attempts = ['remote' => [], 'local' => [], 'accepted' => []];
 
         foreach (explode("\n", $log) as $line) {
-            if (
-                preg_match(
-                    '/Failed (?:password|publickey|keyboard-interactive\S*) for (?:invalid user )?(\S+) from (\S+)/',
-                    $line,
-                    $match
-                ) === 1
-            ) {
-                $attempts['remote'][$match[2]]['failures'] = ($attempts['remote'][$match[2]]['failures'] ?? 0) + 1;
-                $attempts['remote'][$match[2]]['users'][] = $match[1];
-            } elseif (preg_match('/Accepted \S+ for (\S+) from (\S+)/', $line, $match) === 1) {
-                $attempts['accepted'][$match[2]][] = $match[1];
-            } elseif (preg_match('/pam_unix\((?!sshd)([\w-]+):auth\): authentication failure/', $line, $match) === 1) {
-                $attempts['local'][$match[1]] = ($attempts['local'][$match[1]] ?? 0) + 1;
+            $event = self::classify($line);
+
+            if ($event === null) {
+                continue;
+            }
+
+            if ($event['kind'] === 'failure') {
+                $attempts['remote'][$event['source']]['failures'] = (
+                    $attempts['remote'][$event['source']]['failures'] ?? 0
+                ) + 1;
+                $attempts['remote'][$event['source']]['users'][] = $event['user'];
+            } elseif ($event['kind'] === 'accepted') {
+                $attempts['accepted'][$event['source']][] = $event['user'];
+            } else {
+                $attempts['local'][$event['source']] = ($attempts['local'][$event['source']] ?? 0) + 1;
             }
         }
 
@@ -191,6 +193,41 @@ class LoginFailuresCheck extends SystemCheck
         }
 
         return $attempts;
+    }
+
+    /**
+     * Clasifica una línea del registro de autenticación: fallo SSH (origen = IP), acceso SSH aceptado
+     * (origen = IP) o fallo local de PAM (origen = servicio, por ejemplo sudo). La línea de PAM de sshd se
+     * ignora porque sshd ya registra el mismo fallo con su IP.
+     *
+     * @param string $line Mensaje del registro.
+     *
+     * @return array{kind: 'failure'|'accepted'|'local', source: string, user: string}|null Evento, o null
+     *         si la línea no es un intento de inicio de sesión.
+     */
+    public static function classify(string $line): ?array
+    {
+        $failurePattern = '/Failed (?:password|publickey|keyboard-interactive\S*) '
+            . 'for (?:invalid user )?(\S+) from (\S+)/';
+
+        return match (true) {
+            preg_match(
+                $failurePattern,
+                $line,
+                $match
+            ) === 1 => ['kind' => 'failure', 'source' => $match[2], 'user' => $match[1]],
+            preg_match('/Accepted \S+ for (\S+) from (\S+)/', $line, $match) === 1 => [
+                'kind' => 'accepted',
+                'source' => $match[2],
+                'user' => $match[1],
+            ],
+            preg_match('/pam_unix\((?!sshd)([\w-]+):auth\): authentication failure/', $line, $match) === 1 => [
+                'kind' => 'local',
+                'source' => $match[1],
+                'user' => '',
+            ],
+            default => null,
+        };
     }
 
     /**

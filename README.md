@@ -70,6 +70,8 @@ En Windows el monitor corre **como usuario normal**, sin permisos de administrad
 | Cambios en archivos críticos | Cuentas, sudoers, claves SSH autorizadas, cron, servicios, hosts, `ld.so.preload` | Administradores locales, claves Run, carpetas de inicio, tareas programadas, servicios automáticos, hosts | 🔴 si cambió un elemento sensible, hay una cuenta extra con UID 0 o existe `/etc/ld.so.preload`; 🟠 si cambiaron otros elementos |
 | Intentos de acceso al panel (24 h) | Solicitudes que el panel rechazó | Igual | 🟠 con intentos (por ejemplo, *DNS rebinding* desde una página web); 🔴 con 20+ |
 
+Sobre las tarjetas, el gráfico **Actividad de ataques, en tiempo real** muestra barras apiladas con los eventos de cada tipo por intervalo (inicios de sesión fallidos, conexiones bloqueadas, malware y accesos al panel bloqueados) en las últimas 1, 6 o 24 horas. Se actualiza cada 15 segundos; al pasar el cursor (o con las flechas del teclado) muestra el detalle de cada intervalo, y hay una tabla con los intervalos con actividad. Los registros que el sistema no deja leer sin permisos de administrador aparecen como «sin datos».
+
 Las tarjetas que dan 🔴 incluyen los pasos de respuesta: bloquear la IP en el cortafuegos, instalar fail2ban, poner en cuarentena el archivo infectado o revisar las cuentas.
 
 El monitor de integridad registra una **línea base** la primera vez y desde entonces avisa de cualquier cambio. Las actualizaciones del sistema y la instalación de programas también cambian estos archivos; después de revisar los cambios, acéptalos como nueva línea base:
@@ -169,6 +171,8 @@ Variables de `.env`:
 | `SECURITY_MONITOR_REFRESH_SECONDS` | `60` | Cada cuánto el navegador consulta el estado |
 | `SECURITY_MONITOR_RESOURCES_REFRESH_SECONDS` | `2` (Linux), `5` (Windows) | Cada cuánto se toma una muestra de memoria y discos |
 | `SECURITY_MONITOR_RESOURCES_HISTORY_MINUTES` | `15` | Cuánto historial de RAM conserva el gráfico |
+| `SECURITY_MONITOR_ATTACKS_REFRESH_SECONDS` | `15` | Cada cuánto se actualiza el gráfico de actividad de ataques |
+| `SECURITY_MONITOR_ATTACKS_HISTORY_HOURS` | `24` | Cuántas horas de eventos de ataque se consultan |
 
 Si cambias el puerto, vuelve a ejecutar `php artisan monitor:autostart`.
 
@@ -195,9 +199,10 @@ Un chequeo que lanza una excepción aparece como ⚪ sin detener a los demás.
 | `app/Services/Security/UfwStatus.php`, `FirewalldStatus.php` | Evalúan los puertos contra las reglas de UFW o firewalld |
 | `app/Services/Security/ResourceSampler.php` | Lee el uso de memoria y discos (`/proc/meminfo` y `df`, o CIM en Windows) |
 | `app/Services/Security/WindowsAutostart.php` | Arranque automático en Windows (script y accesos directos) |
+| `app/Services/Security/AttackTimeline.php` | Eventos de ataque con su hora para el gráfico en tiempo real |
 | `app/Services/Security/IntegritySnapshot.php`, `IntegrityBaseline.php` | Huella de los elementos vigilados y línea base del monitor de integridad |
 | `app/Services/Security/BlockedRequestLog.php`, `app/Http/Middleware/EnsureLocalAccess.php` | Restricción del panel al propio equipo y registro de los intentos rechazados |
-| `app/Http/Controllers/SecurityDashboardController.php` | Panel (`/`), estado en JSON (`/estado`, `?refresh=1` para forzar) y muestra en vivo (`/recursos`) |
+| `app/Http/Controllers/SecurityDashboardController.php` | Panel (`/`), estado en JSON (`/estado`, `?refresh=1` para forzar), muestra de recursos en vivo (`/recursos`) y actividad de ataques (`/ataques`) |
 | `resources/views/security/dashboard.blade.php` | Página que monta la interfaz con su configuración y el reporte inicial |
 | `resources/js/dashboard/` | Componentes Vue del panel (tarjetas, recursos en tiempo real, gráfico) |
 | `resources/css/dashboard.css` | Estilos propios sobre Bootstrap (franjas de estado, medidores y gráfico) |

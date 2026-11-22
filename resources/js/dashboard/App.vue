@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import AttackTimeline from './AttackTimeline.vue';
 import CheckCard from './CheckCard.vue';
 import ResourcesMonitor from './ResourcesMonitor.vue';
 import { STATUS_ICONS, STATUS_SEVERITY, STATUS_VARIANTS } from './status.js';
@@ -13,6 +14,8 @@ const props = defineProps({
     hostname: { type: String, required: true },
     statusUrl: { type: String, required: true },
     resourcesUrl: { type: String, required: true },
+    attacksUrl: { type: String, required: true },
+    attacksRefreshMs: { type: Number, required: true },
     refreshMs: { type: Number, required: true },
     resourcesRefreshMs: { type: Number, required: true },
     historyMs: { type: Number, required: true },
@@ -21,6 +24,7 @@ const props = defineProps({
 });
 
 const RESOURCES_CATEGORY = 'Recursos';
+const ATTACKS_CATEGORY = 'Detección de ataques';
 const BANNERS = {
     ok: ['Todo en orden', 'Todos los elementos de seguridad están al día.'],
     warning: ['Requiere atención', 'Hay elementos que conviene revisar.'],
@@ -157,6 +161,11 @@ onBeforeUnmount(() => clearInterval(timer));
 
         <section v-for="section in sections" :key="section.category">
             <h2 class="section-title">{{ section.category }}</h2>
+            <AttackTimeline
+                v-if="section.category === ATTACKS_CATEGORY"
+                :url="attacksUrl"
+                :refresh-ms="attacksRefreshMs"
+            />
             <div class="row row-cols-1 row-cols-md-2 row-cols-xl-3 g-3">
                 <div v-for="check in section.checks" :key="check.key" class="col">
                     <CheckCard :check="check" />

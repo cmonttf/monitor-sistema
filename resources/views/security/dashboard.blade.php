@@ -23,6 +23,8 @@
         data-hostname="{{ gethostname() }}"
         data-status-url="{{ route('security.status') }}"
         data-resources-url="{{ route('security.resources') }}"
+        data-attacks-url="{{ route('security.attacks') }}"
+        data-attacks-refresh-ms="{{ $attacksRefreshSeconds * 1000 }}"
         data-refresh-ms="{{ $refreshSeconds * 1000 }}"
         data-resources-refresh-ms="{{ $resourcesRefreshSeconds * 1000 }}"
         data-history-ms="{{ $resourcesHistoryMinutes * 60 * 1000 }}"

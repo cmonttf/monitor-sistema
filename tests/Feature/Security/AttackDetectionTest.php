@@ -4,6 +4,7 @@ namespace Tests\Feature\Security;
 
 use App\Enums\CheckStatus;
 use App\Enums\LinuxFamily;
+use App\Services\Security\AttackTimeline;
 use App\Services\Security\BlockedRequestLog;
 use App\Services\Security\Checks\BlockedConnectionsCheck;
 use App\Services\Security\Checks\FileIntegrityCheck;
@@ -533,5 +534,87 @@ class AttackDetectionTest extends TestCase
         $this->assertSame(CheckStatus::Critical, $check->run()->status);
         $this->assertSame(CheckStatus::Warning, $check->run()->status);
         $this->assertSame(CheckStatus::Unknown, $check->run()->status);
+    }
+
+    /**
+     * La línea de tiempo de Linux toma la hora de cada evento del journal con los mismos criterios que
+     * las tarjetas, e incluye los accesos al panel rechazados.
+     *
+     * @return void
+     */
+    public function test_linux_attack_timeline_collects_events_by_type(): void
+    {
+        $journal = fn (string $filters): string => self::command(
+            "journalctl {$filters} --since=-24h --no-pager -o short-unix"
+        );
+        Process::fake([
+            $journal('--facility=auth,authpriv') => Process::result(implode("\n", [
+                '1795320000.100000 equipo sshd[10]: Failed password for root from 203.0.113.9 port 1 ssh2',
+                '1795320001.100000 equipo sshd[10]: pam_unix(sshd:auth): authentication failure; rhost=203.0.113.9',
+                '1795320050.100000 equipo sudo[11]: pam_unix(sudo:auth): authentication failure; logname=usuario',
+                '1795320060.100000 equipo sshd[12]: Accepted publickey for usuario from 192.168.1.10 port 2 ssh2',
+            ])),
+            $journal('-k') => Process::result(implode("\n", [
+                '1795321000.000000 equipo kernel: [UFW BLOCK] IN=eth0 OUT= SRC=203.0.113.9 DST=10.0.0.2 '
+                    . 'PROTO=TCP DPT=22',
+                '1795321001.000000 equipo kernel: [UFW BLOCK] IN=eth0 OUT= SRC=192.168.1.5 DST=224.0.0.251 PROTO=2',
+            ])),
+            $journal('-u clamav-daemon -u clamav-clamonacc') => Process::result(
+                '1795322000.000000 equipo clamd[1]: Sun Nov 22 03:10:00 2026 -> /tmp/x.exe: Win.Trojan.Agent FOUND'
+            ),
+        ]);
+        $this->get('http://rebind.atacante.example/estado')->assertForbidden();
+
+        $timeline = (
+            new AttackTimeline($this->inspector(['journalctl']), $this->linux, new BlockedRequestLog())
+        )->events(24);
+
+        $this->assertSame([], $timeline['unavailable']);
+        $this->assertSame(
+            [[1795320000, 'login'], [1795320050, 'login'], [1795321000, 'blocked'], [1795322000, 'malware']],
+            array_map(fn (array $event): array => [$event['t'], $event['type']], array_slice($timeline['events'], 0, 4))
+        );
+        $this->assertSame('panel', $timeline['events'][4]['type']);
+    }
+
+    /**
+     * En Windows, los registros que no se pueden leer sin administrador se informan como sin datos.
+     *
+     * @return void
+     */
+    public function test_windows_attack_timeline_reports_unavailable_types(): void
+    {
+        $inspector = $this->partialMock(SystemInspector::class, function (MockInterface $mock): void {
+            $mock->shouldReceive('powershell')->andReturn([
+                'logins' => null,
+                'blocked' => null,
+                'malware' => [1795322000],
+            ]);
+        });
+
+        $timeline = (new AttackTimeline($inspector, Platform::windows(), new BlockedRequestLog()))->events(24);
+
+        $this->assertSame(['login', 'blocked'], $timeline['unavailable']);
+        $this->assertSame([['t' => 1795322000, 'type' => 'malware']], $timeline['events']);
+    }
+
+    /**
+     * El endpoint /ataques entrega la hora del servidor, los eventos y los tipos sin datos.
+     *
+     * @return void
+     */
+    public function test_attacks_endpoint_returns_the_timeline(): void
+    {
+        $this->app->instance(AttackTimeline::class, new AttackTimeline(
+            $this->inspector(),
+            $this->linux,
+            new BlockedRequestLog()
+        ));
+
+        $response = $this->getJson(route('security.attacks'));
+
+        $response->assertOk();
+        $response->assertJsonStructure(['now', 'events', 'unavailable']);
+        $response->assertJsonPath('unavailable', ['login', 'blocked', 'malware']);
     }
 }

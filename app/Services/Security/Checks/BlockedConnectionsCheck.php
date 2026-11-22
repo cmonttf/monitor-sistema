@@ -136,19 +136,14 @@ class BlockedConnectionsCheck extends SystemCheck
         $sources = [];
 
         foreach (explode("\n", $log) as $line) {
-            if (
-                preg_match('/BLOCK|REJECT|DROP/i', $line) !== 1
-                || preg_match('/\bIN=(\S+)/', $line) !== 1
-                || preg_match('/\bSRC=(\S+)/', $line, $source) !== 1
-                || preg_match('/\bDST=(\S+)/', $line, $destination) !== 1
-                || preg_match('/\bDPT=(\d+)/', $line, $port) !== 1
-                || self::isBroadcast($destination[1])
-            ) {
+            $blocked = self::classify($line);
+
+            if ($blocked === null) {
                 continue;
             }
 
-            $sources[$source[1]]['count'] = ($sources[$source[1]]['count'] ?? 0) + 1;
-            $sources[$source[1]]['ports'][(int) $port[1]] = (int) $port[1];
+            $sources[$blocked['source']]['count'] = ($sources[$blocked['source']]['count'] ?? 0) + 1;
+            $sources[$blocked['source']]['ports'][$blocked['port']] = $blocked['port'];
         }
 
         foreach ($sources as $ip => $data) {
@@ -157,6 +152,30 @@ class BlockedConnectionsCheck extends SystemCheck
         }
 
         return $sources;
+    }
+
+    /**
+     * Clasifica un mensaje del kernel: una conexión entrante bloqueada hacia un puerto, sin contar la
+     * multidifusión, la difusión ni los paquetes sin puerto.
+     *
+     * @param string $line Mensaje del kernel.
+     *
+     * @return array{source: string, port: int}|null Origen y puerto, o null si no es un bloqueo relevante.
+     */
+    public static function classify(string $line): ?array
+    {
+        if (
+            preg_match('/BLOCK|REJECT|DROP/i', $line) !== 1
+            || preg_match('/\bIN=(\S+)/', $line) !== 1
+            || preg_match('/\bSRC=(\S+)/', $line, $source) !== 1
+            || preg_match('/\bDST=(\S+)/', $line, $destination) !== 1
+            || preg_match('/\bDPT=(\d+)/', $line, $port) !== 1
+            || self::isBroadcast($destination[1])
+        ) {
+            return null;
+        }
+
+        return ['source' => $source[1], 'port' => (int) $port[1]];
     }
 
     /**

@@ -51,6 +51,20 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Gráfico de actividad de ataques en tiempo real
+    |--------------------------------------------------------------------------
+    |
+    | "attacks_refresh_seconds" es cada cuánto el navegador lo actualiza;
+    | "attacks_history_hours" es cuánto historial de eventos muestra.
+    |
+    */
+
+    'attacks_refresh_seconds' => (int) env('SECURITY_MONITOR_ATTACKS_REFRESH_SECONDS', 15),
+
+    'attacks_history_hours' => (int) env('SECURITY_MONITOR_ATTACKS_HISTORY_HOURS', 24),
+
+    /*
+    |--------------------------------------------------------------------------
     | Chequeos habilitados (en orden de aparición)
     |--------------------------------------------------------------------------
     |

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\Security\AttackTimeline;
 use App\Services\Security\Checks\DiskSpaceCheck;
 use App\Services\Security\Checks\MemoryCheck;
 use App\Services\Security\Platform;
@@ -40,6 +41,7 @@ class SecurityDashboardController extends Controller
             'refreshSeconds' => config('security-monitor.refresh_seconds'),
             'resourcesRefreshSeconds' => config('security-monitor.resources_refresh_seconds'),
             'resourcesHistoryMinutes' => config('security-monitor.resources_history_minutes'),
+            'attacksRefreshSeconds' => config('security-monitor.attacks_refresh_seconds'),
             'resourceThresholds' => [
                 'memory' => ['warning' => MemoryCheck::WARNING_PERCENT, 'critical' => MemoryCheck::CRITICAL_PERCENT],
                 'disk' => [
@@ -83,6 +85,22 @@ class SecurityDashboardController extends Controller
                 $this->monitor->checkRow(new MemoryCheck($resources, $platform)),
                 $this->monitor->checkRow(new DiskSpaceCheck($resources, $platform)),
             ],
+        ]);
+    }
+
+    /**
+     * Entrega la actividad de ataques de las últimas 24 horas para el gráfico en tiempo real: cada evento
+     * con su hora y su tipo, y los tipos que no se pudieron leer.
+     *
+     * @param AttackTimeline $timeline Línea de tiempo de la actividad de ataques.
+     *
+     * @return JsonResponse Hora del servidor, eventos y tipos sin datos.
+     */
+    public function attacks(AttackTimeline $timeline): JsonResponse
+    {
+        return response()->json([
+            'now' => now()->getTimestamp(),
+            ...$timeline->events((int) config('security-monitor.attacks_history_hours')),
         ]);
     }
 }

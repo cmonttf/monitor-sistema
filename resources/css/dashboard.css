@@ -14,6 +14,40 @@
     --series-track: #1c3557;
 }
 
+/* Tipos de eventos del gráfico de ataques: primeros cuatro tonos de la paleta categórica, validados para
+   cada fondo (el aqua y el amarillo tienen poco contraste en modo claro: la leyenda y la tabla los
+   acompañan con texto). */
+:root {
+    --attack-login: #2a78d6;
+    --attack-blocked: #eb6834;
+    --attack-malware: #1baf7a;
+    --attack-panel: #eda100;
+}
+
+[data-bs-theme="dark"] {
+    --attack-login: #3987e5;
+    --attack-blocked: #d95926;
+    --attack-malware: #199e70;
+    --attack-panel: #c98500;
+}
+
+.legend-swatch {
+    display: inline-block;
+    flex: none;
+    width: 0.75rem;
+    height: 0.75rem;
+    border-radius: 3px;
+    vertical-align: -0.1em;
+}
+
+.chart.attack-chart {
+    min-height: 200px;
+}
+
+.chart .column-highlight {
+    fill: var(--bs-secondary-bg);
+}
+
 body {
     background-color: var(--bs-tertiary-bg);
 }
