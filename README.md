@@ -1,58 +1,127 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Monitor de Seguridad
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Panel web local que muestra si los elementos de seguridad de un equipo Ubuntu están al día, con alertas por color. Se levanta solo al iniciar sesión y se abre en el navegador.
 
-## About Laravel
+- 🟢 **Al día** · 🟠 **Atención** · 🔴 **Crítico** · ⚪ **Sin datos**
+- Aviso superior con el peor estado encontrado; el título y el ícono de la pestaña cambian de color.
+- Se actualiza cada 60 segundos; el botón **Verificar ahora** fuerza una revisión inmediata.
+- Escucha solo en `127.0.0.1`, así que no es accesible desde la red.
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+## Qué revisa
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+| Categoría | Chequeo | Cuándo alerta |
+|---|---|---|
+| Actualizaciones | Paquetes del sistema (APT) | 🔴 si hay actualizaciones de seguridad pendientes, 🟠 si hay otras |
+| | Lista de paquetes | 🟠 más de 3 días sin actualizarse, 🔴 más de 14 |
+| | Actualizaciones automáticas | 🔴 si unattended-upgrades no está instalado o está desactivado, 🟠 si lleva más de 7 días sin ejecutarse |
+| | Reinicio pendiente | 🟠 si hay un kernel más nuevo instalado o el sistema pide reiniciar |
+| | Aplicaciones Snap | 🟠 si hay Snaps pendientes de actualizar |
+| | Firmware (fwupd) | 🟠 si hay firmware nuevo disponible |
+| Protección | Cortafuegos (UFW) | 🔴 si está desactivado o no está instalado |
+| | Firmas del antivirus (ClamAV) | 🟠 más de 2 días de antigüedad, 🔴 más de 7 |
+| | Actualizador del antivirus (freshclam) | 🔴 si el servicio falló, 🟠 si está detenido |
+| | Escáner del antivirus (clamd) | 🔴 si el servicio falló, 🟠 si está detenido |
+| Sistema | AppArmor | 🔴 si está deshabilitado |
+| | Arranque seguro (Secure Boot) | 🟠 si está desactivado |
+| | Cifrado de disco | 🟠 si no hay volúmenes LUKS |
+| | Bloqueo de pantalla | 🔴 si está desactivado, 🟠 si tarda más de 15 minutos |
+| Red | Servidor SSH | 🔴 si permite entrar como root, 🟠 si acepta contraseñas |
+| | Puertos abiertos a la red | 🟠 si algún puerto es accesible a través de UFW |
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+Cada tarjeta muestra los detalles (paquetes, fechas, puertos) y, cuando corresponde, el comando para solucionar el problema.
 
-## Learning Laravel
+## Requisitos
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+- Ubuntu con escritorio GNOME y systemd.
+- PHP 8.3 o superior y Composer.
+- Opcionales, según lo que se quiera revisar: `ufw`, `clamav`, `clamav-freshclam`, `clamav-daemon`, `fwupd`, `snapd`, `mokutil`. Si alguno falta, su tarjeta lo indica.
 
-In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
-
-You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
-
-## Agentic Development
-
-Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
+## Instalación
 
 ```bash
-composer require laravel/boost --dev
-
-php artisan boost:install
+git clone https://github.com/cmonttf/monitor-sistema.git
+cd monitor-sistema
+composer install
+cp .env.example .env
+php artisan key:generate
+php artisan migrate
 ```
 
-Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
+Ajusta en `.env` la zona horaria (`APP_TIMEZONE`, por ejemplo `America/Santiago`) y el idioma (`APP_LOCALE=es`).
 
-## Contributing
+### Arranque automático
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+```bash
+php artisan monitor:autostart
+```
 
-## Code of Conduct
+Este comando instala, para el usuario actual:
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+- Un servicio systemd de usuario (`~/.config/systemd/user/monitor-seguridad.service`) que levanta el servidor en `http://127.0.0.1:8787`.
+- Una entrada de autoarranque del escritorio (`~/.config/autostart/monitor-seguridad.desktop`) que abre el panel en el navegador al iniciar sesión.
+- Un lanzador en el menú de aplicaciones.
 
-## Security Vulnerabilities
+Para abrir el panel a mano: `php artisan monitor:open`. Para desinstalar el arranque automático: `php artisan monitor:autostart --remove`.
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+### Permiso para leer las reglas de UFW (opcional)
 
-## License
+UFW solo deja leer sus reglas a root. Para que la tarjeta de puertos cruce los puertos abiertos con las reglas del cortafuegos, permite a tu usuario ejecutar **solo** `ufw status verbose` sin contraseña:
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+```bash
+echo "$USER ALL=(root) NOPASSWD: /usr/sbin/ufw status verbose" | sudo tee /etc/sudoers.d/monitor-seguridad
+sudo chmod 440 /etc/sudoers.d/monitor-seguridad
+sudo visudo -cf /etc/sudoers.d/monitor-seguridad
+```
+
+Es un comando de solo lectura: no permite cambiar reglas ni desactivar el cortafuegos. Sin este permiso, la tarjeta lista los puertos que escuchan en la red y muestra el comando para habilitarlo. Para revocarlo: `sudo rm /etc/sudoers.d/monitor-seguridad`.
+
+## Configuración
+
+Variables de `.env`:
+
+| Variable | Por defecto | Descripción |
+|---|---|---|
+| `SECURITY_MONITOR_PORT` | `8787` | Puerto del panel (siempre en `127.0.0.1`) |
+| `SECURITY_MONITOR_CACHE_SECONDS` | `300` | Cada cuánto se vuelven a ejecutar los chequeos |
+| `SECURITY_MONITOR_REFRESH_SECONDS` | `60` | Cada cuánto el navegador consulta el estado |
+
+Si cambias el puerto, vuelve a ejecutar `php artisan monitor:autostart`.
+
+Los chequeos activos y su orden se definen en [`config/security-monitor.php`](config/security-monitor.php).
+
+## Agregar un chequeo
+
+1. Crea una clase en `app/Services/Security/Checks/` que extienda `SystemCheck` e implemente `name()`, `category()` y `run()`. `run()` devuelve un `CheckResult` (`ok`, `warning`, `critical` o `unknown`) con un mensaje y detalles opcionales.
+2. Usa `$this->system` (`SystemInspector`) para ejecutar comandos y leer archivos; así el chequeo se puede probar con dobles.
+3. Regístrala en `config/security-monitor.php`.
+4. Agrega sus pruebas en `tests/Feature/Security/SecurityChecksTest.php`.
+
+Un chequeo que lanza una excepción aparece como ⚪ sin detener a los demás.
+
+## Estructura
+
+| Ruta | Contenido |
+|---|---|
+| `app/Services/Security/Checks/` | Un archivo por chequeo |
+| `app/Services/Security/SecurityMonitor.php` | Ejecuta los chequeos, calcula el estado global y guarda el reporte en caché |
+| `app/Services/Security/SystemInspector.php` | Acceso a comandos y archivos del sistema |
+| `app/Services/Security/UfwStatus.php` | Interpreta `ufw status verbose` y evalúa puertos contra las reglas |
+| `app/Http/Controllers/SecurityDashboardController.php` | Panel (`/`) y estado en JSON (`/estado`, `?refresh=1` para forzar) |
+| `resources/views/security/dashboard.blade.php` | Interfaz autocontenida (HTML, CSS y JS), sin compilación |
+| `app/Console/Commands/` | `monitor:autostart` y `monitor:open` |
+
+## Calidad de código
+
+```bash
+composer quality   # phpcs + PHPStan + pruebas
+composer phpcs     # estilo PSR-12 y PHPDoc obligatorio (phpcs.xml)
+composer phpcbf    # corrige automáticamente lo que phpcs puede arreglar
+composer phpstan   # análisis estático nivel 5 con Larastan (phpstan.neon)
+php artisan test   # pruebas
+```
+
+Las pruebas simulan los comandos y archivos del sistema y bloquean la ejecución de procesos reales, así que no dependen del equipo en que se ejecutan.
+
+## Autor
+
+Camilo Montt — cmonttf@gmail.com
