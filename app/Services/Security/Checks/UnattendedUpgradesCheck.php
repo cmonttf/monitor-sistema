@@ -3,6 +3,7 @@
 namespace App\Services\Security\Checks;
 
 use App\Services\Security\CheckResult;
+use App\Services\Security\FixStep;
 
 /**
  * Actualizaciones automáticas de seguridad (unattended-upgrades).
@@ -53,7 +54,13 @@ class UnattendedUpgradesCheck extends SystemCheck
         if (! $this->system->hasCommand('unattended-upgrade')) {
             return CheckResult::critical(
                 'unattended-upgrades no está instalado.',
-                ['sudo apt install unattended-upgrades']
+                [],
+                [
+                    FixStep::command(
+                        'Instala y activa las actualizaciones automáticas de seguridad.',
+                        'sudo apt install unattended-upgrades && sudo dpkg-reconfigure -plow unattended-upgrades'
+                    ),
+                ]
             );
         }
 
@@ -64,7 +71,13 @@ class UnattendedUpgradesCheck extends SystemCheck
         if (! $isEnabled) {
             return CheckResult::critical(
                 'Las actualizaciones automáticas están desactivadas.',
-                ['sudo dpkg-reconfigure -plow unattended-upgrades']
+                [],
+                [
+                    FixStep::command(
+                        'Activa las actualizaciones automáticas (responde «Sí»).',
+                        'sudo dpkg-reconfigure -plow unattended-upgrades'
+                    ),
+                ]
             );
         }
 
@@ -78,7 +91,20 @@ class UnattendedUpgradesCheck extends SystemCheck
         $details = ['Última ejecución: ' . $lastRun->format('d-m-Y H:i')];
 
         if ($days > 7) {
-            return CheckResult::warning("Activadas, pero no se ejecutan hace {$days} días.", $details);
+            return CheckResult::warning("Activadas, pero no se ejecutan hace {$days} días.", $details, [
+                FixStep::command(
+                    'Revisa que el temporizador diario esté activo y cuándo corre.',
+                    'systemctl list-timers apt-daily-upgrade.timer'
+                ),
+                FixStep::command(
+                    'Ejecuta las actualizaciones automáticas ahora, mostrando lo que hacen.',
+                    'sudo unattended-upgrade -v'
+                ),
+                FixStep::command(
+                    'Si el temporizador está detenido, actívalo.',
+                    'sudo systemctl enable --now apt-daily.timer apt-daily-upgrade.timer'
+                ),
+            ]);
         }
 
         return CheckResult::ok('Activadas; última ejecución ' . $lastRun->diffForHumans() . '.', $details);

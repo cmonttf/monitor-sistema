@@ -3,6 +3,7 @@
 namespace App\Services\Security\Checks;
 
 use App\Services\Security\CheckResult;
+use App\Services\Security\FixStep;
 
 /**
  * Presencia de volúmenes cifrados con LUKS/dm-crypt.
@@ -56,6 +57,19 @@ class DiskEncryptionCheck extends SystemCheck
             return CheckResult::ok('El disco está cifrado.', $encrypted);
         }
 
-        return CheckResult::warning('No se detectaron discos cifrados; los datos quedan expuestos si roban el equipo.');
+        return CheckResult::warning(
+            'No se detectaron discos cifrados; los datos quedan expuestos si roban el equipo.',
+            [],
+            [
+                FixStep::note(
+                    'Cifrar el disco del sistema requiere reinstalar Ubuntu eligiendo «Cifrar el disco» (LUKS) en el '
+                        . 'instalador.'
+                ),
+                FixStep::note('Antes de reinstalar, respalda tus datos en un disco externo.'),
+                FixStep::note(
+                    'Para discos externos o USB, puedes cifrarlos desde la aplicación Discos (formatear con LUKS).'
+                ),
+            ]
+        );
     }
 }

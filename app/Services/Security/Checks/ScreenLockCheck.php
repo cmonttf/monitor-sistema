@@ -3,6 +3,7 @@
 namespace App\Services\Security\Checks;
 
 use App\Services\Security\CheckResult;
+use App\Services\Security\FixStep;
 
 /**
  * Bloqueo automático de pantalla en GNOME.
@@ -59,17 +60,44 @@ class ScreenLockCheck extends SystemCheck
         $idleSeconds = (int) preg_replace('/\D/', '', $idle->output());
 
         if (trim($lock->output()) !== 'true') {
-            return CheckResult::critical('El bloqueo automático de pantalla está desactivado.');
+            return CheckResult::critical('El bloqueo automático de pantalla está desactivado.', [], [
+                FixStep::command(
+                    'Activa el bloqueo automático de pantalla.',
+                    'gsettings set org.gnome.desktop.screensaver lock-enabled true'
+                ),
+                FixStep::command(
+                    'Bloquea tras 5 minutos de inactividad.',
+                    'gsettings set org.gnome.desktop.session idle-delay 300'
+                ),
+            ]);
         }
 
         if ($idleSeconds === 0) {
-            return CheckResult::warning('La pantalla nunca se apaga por inactividad, por lo que no se bloquea.');
+            return CheckResult::warning(
+                'La pantalla nunca se apaga por inactividad, por lo que no se bloquea.',
+                [],
+                [
+                    FixStep::command(
+                        'Bloquea tras 5 minutos de inactividad.',
+                        'gsettings set org.gnome.desktop.session idle-delay 300'
+                    ),
+                ]
+            );
         }
 
         $minutes = intdiv($idleSeconds, 60);
 
         if ($idleSeconds > self::MAX_IDLE_SECONDS) {
-            return CheckResult::warning("La pantalla se bloquea tras {$minutes} minutos; se recomienda 15 o menos.");
+            return CheckResult::warning(
+                "La pantalla se bloquea tras {$minutes} minutos; se recomienda 15 o menos.",
+                [],
+                [
+                    FixStep::command(
+                        'Bloquea tras 5 minutos de inactividad.',
+                        'gsettings set org.gnome.desktop.session idle-delay 300'
+                    ),
+                ]
+            );
         }
 
         return CheckResult::ok("La pantalla se bloquea tras {$minutes} minutos de inactividad.");

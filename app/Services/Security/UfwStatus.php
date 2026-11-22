@@ -7,7 +7,7 @@ namespace App\Services\Security;
  * es alcanzable desde la red (primera regla que coincide, como UFW).
  *
  * @phpstan-type Rule array{to: string, action: string, from: string, v6: bool}
- * @phpstan-type Verdict array{allowed: bool, reason: string}
+ * @phpstan-type Verdict array{allowed: bool, reason: string, source: 'inactive'|'rule'|'default', rule: string|null}
  *
  * @package App\Services\Security
  * @author  Camilo Montt <cmonttf@gmail.com>
@@ -88,12 +88,12 @@ final readonly class UfwStatus
      * @param string $protocol Protocolo: tcp o udp.
      * @param bool   $v6       true para IPv6, false para IPv4.
      *
-     * @return Verdict Si está permitido y el motivo en español.
+     * @return Verdict Si está permitido, el motivo en español, qué lo decidió y la regla que coincidió.
      */
     public function evaluate(int $port, string $protocol, bool $v6): array
     {
         if (! $this->isActive) {
-            return ['allowed' => true, 'reason' => 'cortafuegos desactivado'];
+            return ['allowed' => true, 'reason' => 'cortafuegos desactivado', 'source' => 'inactive', 'rule' => null];
         }
 
         foreach ($this->rules as $rule) {
@@ -108,7 +108,12 @@ final readonly class UfwStatus
             $isAllowed = str_starts_with($rule['action'], 'ALLOW') || str_starts_with($rule['action'], 'LIMIT');
             $verb = $isAllowed ? 'permitido' : 'bloqueado';
 
-            return ['allowed' => $isAllowed, 'reason' => "{$verb} por la regla «{$rule['to']}» desde {$rule['from']}"];
+            return [
+                'allowed' => $isAllowed,
+                'reason' => "{$verb} por la regla «{$rule['to']}» desde {$rule['from']}",
+                'source' => 'rule',
+                'rule' => $rule['to'],
+            ];
         }
 
         $isAllowed = $this->defaultIncoming === 'allow';
@@ -117,6 +122,8 @@ final readonly class UfwStatus
             'allowed' => $isAllowed,
             'reason' => ($isAllowed ? 'permitido' : 'bloqueado')
                 . " por la política por defecto ({$this->defaultIncoming})",
+            'source' => 'default',
+            'rule' => null,
         ];
     }
 

@@ -3,6 +3,7 @@
 namespace App\Services\Security\Checks;
 
 use App\Services\Security\CheckResult;
+use App\Services\Security\FixStep;
 use App\Services\Security\UfwStatus;
 
 /**
@@ -69,15 +70,14 @@ class OpenPortsCheck extends SystemCheck
         if ($firewall === null) {
             return CheckResult::warning(
                 count($listeners) . ' puertos TCP escuchan en la red (no se pudieron leer las reglas de UFW).',
-                [
-                    ...array_map(fn (int $port): string => "{$port}/tcp", array_keys($listeners)),
-                    ...$this->sudoersHint(),
-                ]
+                array_map(fn (int $port): string => "{$port}/tcp", array_keys($listeners)),
+                $this->sudoersSteps()
             );
         }
 
         $open = [];
         $blocked = [];
+        $openVerdicts = [];
 
         foreach ($listeners as $port => $families) {
             $verdicts = array_map(fn (bool $v6): array => $firewall->evaluate($port, 'tcp', $v6), $families);
@@ -85,6 +85,7 @@ class OpenPortsCheck extends SystemCheck
 
             if ($allowed !== []) {
                 $open[] = "⚠ {$port}/tcp — {$allowed[0]['reason']}";
+                $openVerdicts[] = $allowed[0];
             } else {
                 $blocked[] = "✓ {$port}/tcp — {$verdicts[0]['reason']}";
             }
@@ -93,7 +94,8 @@ class OpenPortsCheck extends SystemCheck
         if ($open !== []) {
             return CheckResult::warning(
                 count($open) . ' puertos son accesibles desde la red a través del cortafuegos.',
-                [...$open, ...$blocked]
+                [...$open, ...$blocked],
+                $this->closePortsSteps($openVerdicts)
             );
         }
 
@@ -182,19 +184,62 @@ class OpenPortsCheck extends SystemCheck
     }
 
     /**
-     * Arma las instrucciones para crear la regla de sudoers con el usuario actual.
+     * Arma los pasos para cerrar los puertos accesibles según qué los dejó abiertos: el cortafuegos
+     * desactivado, la política por defecto o reglas concretas.
      *
-     * @return list<string> Explicación y comando a ejecutar.
+     * @param list<array{allowed: bool, reason: string, source: string, rule: string|null}> $openVerdicts Veredictos.
+     *
+     * @return list<FixStep> Pasos para cerrar los puertos.
      */
-    private function sudoersHint(): array
+    private function closePortsSteps(array $openVerdicts): array
+    {
+        $sources = array_column($openVerdicts, 'source');
+        $rules = array_values(array_unique(array_filter(array_column($openVerdicts, 'rule'))));
+        $steps = [FixStep::command('Identifica qué programa usa cada puerto.', 'sudo ss -tlnp')];
+
+        if (in_array('inactive', $sources, true)) {
+            $steps[] = FixStep::command('Activa el cortafuegos.', 'sudo ufw enable');
+        }
+
+        if (in_array('default', $sources, true)) {
+            $steps[] = FixStep::command(
+                'Bloquea por defecto las conexiones entrantes.',
+                'sudo ufw default deny incoming'
+            );
+        }
+
+        if ($rules !== []) {
+            $steps[] = FixStep::command('Lista las reglas del cortafuegos con su número.', 'sudo ufw status numbered');
+            $steps[] = FixStep::note(
+                'Si no necesitas ese acceso, elimina la regla «' . implode('», «', $rules)
+                . '» con «sudo ufw delete <número>» (sus copias IPv4 e IPv6 tienen números distintos).'
+            );
+        }
+
+        $steps[] = FixStep::note('Si un servicio sólo se usa en este equipo, configúralo para escuchar en 127.0.0.1.');
+
+        return $steps;
+    }
+
+    /**
+     * Arma los pasos para crear la regla de sudoers que permite leer UFW, con el usuario actual.
+     *
+     * @return list<FixStep> Pasos para habilitar la lectura de las reglas.
+     */
+    private function sudoersSteps(): array
     {
         $user = getenv('USER') ?: get_current_user();
         $command = implode(' ', self::UFW_COMMAND);
 
         return [
-            'Para cruzar con UFW, permite al monitor leer el estado del cortafuegos (una sola vez):',
-            "echo '{$user} ALL=(root) NOPASSWD: {$command}' | sudo tee " . self::SUDOERS_FILE
-                . ' && sudo chmod 440 ' . self::SUDOERS_FILE,
+            FixStep::command(
+                'Permite al monitor leer el estado del cortafuegos (sólo ese comando de lectura, una sola vez).',
+                "echo '{$user} ALL=(root) NOPASSWD: {$command}' | sudo tee " . self::SUDOERS_FILE
+                    . ' && sudo chmod 440 ' . self::SUDOERS_FILE
+            ),
+            FixStep::command('Comprueba que la regla quedó bien escrita (debe decir «parsed OK»).', 'sudo visudo -cf '
+                . self::SUDOERS_FILE),
+            FixStep::command('Mientras tanto, revisa a mano qué programa usa cada puerto.', 'sudo ss -tlnp'),
         ];
     }
 }

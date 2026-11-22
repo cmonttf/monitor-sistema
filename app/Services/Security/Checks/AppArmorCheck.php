@@ -3,6 +3,7 @@
 namespace App\Services\Security\Checks;
 
 use App\Services\Security\CheckResult;
+use App\Services\Security\FixStep;
 
 /**
  * Módulo de control de acceso obligatorio AppArmor.
@@ -50,6 +51,16 @@ class AppArmorCheck extends SystemCheck
             return CheckResult::ok('AppArmor está habilitado en el kernel.');
         }
 
-        return CheckResult::critical('AppArmor está deshabilitado.');
+        return CheckResult::critical('AppArmor está deshabilitado.', [], [
+                FixStep::command('Activa el servicio de AppArmor.', 'sudo systemctl enable --now apparmor'),
+                FixStep::command(
+                    'Revisa que el arranque no lo desactive (no debe aparecer apparmor=0).',
+                    'cat /proc/cmdline'
+                ),
+                FixStep::note(
+                    'Si aparece apparmor=0, quítalo de GRUB_CMDLINE_LINUX en /etc/default/grub, ejecuta «sudo '
+                        . 'update-grub» y reinicia.'
+                ),
+        ]);
     }
 }

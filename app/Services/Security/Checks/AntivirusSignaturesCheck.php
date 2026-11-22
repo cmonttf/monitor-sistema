@@ -3,6 +3,7 @@
 namespace App\Services\Security\Checks;
 
 use App\Services\Security\CheckResult;
+use App\Services\Security\FixStep;
 use Carbon\CarbonImmutable;
 use Throwable;
 
@@ -55,7 +56,13 @@ class AntivirusSignaturesCheck extends SystemCheck
         if (! $this->system->hasCommand('clamscan')) {
             return CheckResult::warning(
                 'No hay antivirus ClamAV instalado.',
-                ['sudo apt install clamav clamav-freshclam']
+                [],
+                [
+                    FixStep::command(
+                        'Instala ClamAV y su actualizador de firmas.',
+                        'sudo apt install clamav clamav-freshclam'
+                    ),
+                ]
             );
         }
 
@@ -79,14 +86,27 @@ class AntivirusSignaturesCheck extends SystemCheck
             'Fecha de firmas: ' . $signedAt->format('d-m-Y H:i'),
         ];
 
+        $updateSignatures = [
+                FixStep::command(
+                    'Descarga las firmas ahora (detiene el servicio mientras tanto para liberar la base).',
+                    'sudo systemctl stop clamav-freshclam && sudo freshclam && sudo systemctl start clamav-freshclam'
+                ),
+                FixStep::note(
+                    'Si freshclam muestra un error 429 o «cool-down», el servidor te está limitando: espera unas '
+                        . 'horas y repite.'
+                ),
+        ];
+
         return match (true) {
             $days > self::CRITICAL_DAYS => CheckResult::critical(
                 "Las firmas tienen {$days} días de antigüedad.",
-                $details
+                $details,
+                $updateSignatures
             ),
             $days > self::WARNING_DAYS => CheckResult::warning(
                 "Las firmas tienen {$days} días de antigüedad.",
-                $details
+                $details,
+                $updateSignatures
             ),
             default => CheckResult::ok('Firmas actualizadas ' . $signedAt->diffForHumans() . '.', $details),
         };

@@ -3,6 +3,7 @@
 namespace App\Services\Security\Checks;
 
 use App\Services\Security\CheckResult;
+use App\Services\Security\FixStep;
 
 /**
  * Actualizaciones de firmware disponibles vía fwupd (BIOS/UEFI, SSD, etc.).
@@ -40,7 +41,9 @@ class FirmwareUpdatesCheck extends SystemCheck
     public function run(): CheckResult
     {
         if (! $this->system->hasCommand('fwupdmgr')) {
-            return CheckResult::unknown('fwupd no está instalado.');
+            return CheckResult::unknown('fwupd no está instalado.', [], [
+                FixStep::command('Instala el gestor de actualizaciones de firmware.', 'sudo apt install fwupd'),
+            ]);
         }
 
         $result = $this->system->run(['fwupdmgr', 'get-updates', '--json'], 30);
@@ -66,7 +69,14 @@ class FirmwareUpdatesCheck extends SystemCheck
         if ($details !== []) {
             return CheckResult::warning(
                 count($details) . ' actualizaciones de firmware disponibles.',
-                [...$details, 'Aplicar con: fwupdmgr update']
+                $details,
+                [
+                    FixStep::note('Conecta el cargador antes de actualizar firmware.'),
+                    FixStep::command(
+                        'Descarga los metadatos y aplica las actualizaciones (puede pedir reiniciar).',
+                        'fwupdmgr refresh && fwupdmgr update'
+                    ),
+                ]
             );
         }
 

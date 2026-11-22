@@ -13,6 +13,7 @@ use App\Services\Security\Checks\RebootRequiredCheck;
 use App\Services\Security\Checks\ScreenLockCheck;
 use App\Services\Security\Checks\SnapUpdatesCheck;
 use App\Services\Security\Checks\UnattendedUpgradesCheck;
+use App\Services\Security\FixStep;
 use App\Services\Security\SystemInspector;
 use Illuminate\Support\Facades\Process;
 use Mockery\MockInterface;
@@ -49,6 +50,18 @@ class SecurityChecksTest extends TestCase
     private static function command(string $command): string
     {
         return "'" . str_replace(' ', "' '", $command) . "'";
+    }
+
+    /**
+     * Extrae los comandos de una lista de pasos de solución.
+     *
+     * @param list<FixStep> $steps Pasos de solución.
+     *
+     * @return list<string> Comandos, sin los pasos que son sólo indicaciones.
+     */
+    private static function commands(array $steps): array
+    {
+        return array_values(array_filter(array_map(fn (FixStep $step): ?string => $step->command, $steps)));
     }
 
     /**
@@ -92,6 +105,10 @@ class SecurityChecksTest extends TestCase
         $this->assertSame(CheckStatus::Critical, $result->status);
         $this->assertSame('1 actualizaciones de seguridad pendientes (2 en total).', $result->message);
         $this->assertSame(['🔒 openssl', 'tracker-extract'], $result->details);
+        $this->assertSame(
+            'sudo apt update && sudo apt install --only-upgrade openssl tracker-extract',
+            $result->fix[0]->command
+        );
     }
 
     /**
@@ -169,6 +186,10 @@ class SecurityChecksTest extends TestCase
         $result = (new AntivirusUpdaterCheck($inspector))->run();
 
         $this->assertSame(CheckStatus::Critical, $result->status);
+        $this->assertContains(
+            'sudo systemctl reset-failed clamav-freshclam && sudo systemctl restart clamav-freshclam',
+            self::commands($result->fix)
+        );
     }
 
     /**
@@ -317,6 +338,7 @@ class SecurityChecksTest extends TestCase
 
         $this->assertSame(CheckStatus::Ok, $result->status);
         $this->assertSame('2 servicios escuchan en la red, pero el cortafuegos los bloquea.', $result->message);
+        $this->assertSame([], $result->fix);
         $this->assertSame([
             '✓ 80/tcp — bloqueado por la política por defecto (deny)',
             '✓ 51330/tcp — bloqueado por la política por defecto (deny)',
@@ -346,6 +368,11 @@ class SecurityChecksTest extends TestCase
             '⚠ 80/tcp — permitido por la regla «Apache Full» desde Anywhere',
             '✓ 51330/tcp — bloqueado por la política por defecto (deny)',
         ], $result->details);
+        $this->assertContains('sudo ufw status numbered', self::commands($result->fix));
+        $this->assertStringContainsString('«Apache Full»', implode(' ', array_column(
+            array_map(fn (FixStep $step): array => $step->toArray(), $result->fix),
+            'text'
+        )));
     }
 
     /**
@@ -399,6 +426,7 @@ class SecurityChecksTest extends TestCase
 
         $this->assertSame(CheckStatus::Warning, $result->status);
         $this->assertSame('2 puertos son accesibles desde la red a través del cortafuegos.', $result->message);
+        $this->assertContains('sudo ufw default deny incoming', self::commands($result->fix));
     }
 
     /**
@@ -417,8 +445,8 @@ class SecurityChecksTest extends TestCase
             '2 puertos TCP escuchan en la red (no se pudieron leer las reglas de UFW).',
             $result->message
         );
-        $this->assertSame(['80/tcp', '51330/tcp'], array_slice($result->details, 0, 2));
-        $this->assertStringContainsString('NOPASSWD: /usr/sbin/ufw status verbose', $result->details[3]);
+        $this->assertSame(['80/tcp', '51330/tcp'], $result->details);
+        $this->assertStringContainsString('NOPASSWD: /usr/sbin/ufw status verbose', (string) $result->fix[0]->command);
     }
 
     /**
@@ -434,6 +462,22 @@ class SecurityChecksTest extends TestCase
 
         $this->assertSame(CheckStatus::Ok, $result->status);
         $this->assertSame('Ningún servicio escucha fuera del equipo.', $result->message);
+    }
+
+    /**
+     * Las aplicaciones Snap pendientes indican el comando para actualizarlas.
+     *
+     * @return void
+     */
+    public function test_snap_updates_include_the_refresh_command(): void
+    {
+        Process::fake([self::command('snap refresh --list') => Process::result(
+            "Name     Version  Rev  Size  Publisher  Notes\nfirefox  140.0    1    90MB  mozilla    -\n"
+        )]);
+
+        $result = (new SnapUpdatesCheck($this->inspector(commands: ['snap'])))->run();
+
+        $this->assertContains('sudo snap refresh', self::commands($result->fix));
     }
 
     /**

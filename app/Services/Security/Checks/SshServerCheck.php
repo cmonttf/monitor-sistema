@@ -3,6 +3,7 @@
 namespace App\Services\Security\Checks;
 
 use App\Services\Security\CheckResult;
+use App\Services\Security\FixStep;
 
 /**
  * Exposición y configuración del servidor SSH.
@@ -52,14 +53,35 @@ class SshServerCheck extends SystemCheck
         if (preg_match('/^\s*PermitRootLogin\s+yes/mi', $config) === 1) {
             return CheckResult::critical(
                 'SSH activo y permite acceso directo como root.',
-                ['Define PermitRootLogin no en /etc/ssh/sshd_config']
+                [],
+                [
+                    FixStep::command(
+                        'Edita la configuración y cambia la línea a «PermitRootLogin no».',
+                        'sudoedit /etc/ssh/sshd_config'
+                    ),
+                    FixStep::command('Aplica el cambio.', 'sudo systemctl restart ssh'),
+                    FixStep::command(
+                        'Si no necesitas entrar a este equipo por SSH, desactívalo.',
+                        'sudo systemctl disable --now ssh'
+                    ),
+                ]
             );
         }
 
         if (preg_match('/^\s*PasswordAuthentication\s+yes/mi', $config) === 1) {
             return CheckResult::warning(
                 'SSH activo con acceso por contraseña.',
-                ['Considera usar sólo llaves (PasswordAuthentication no)']
+                [],
+                [
+                    FixStep::note(
+                        'Primero copia tu llave pública desde el equipo cliente con «ssh-copy-id usuario@este-equipo».'
+                    ),
+                    FixStep::command(
+                        'Luego cambia la línea a «PasswordAuthentication no».',
+                        'sudoedit /etc/ssh/sshd_config'
+                    ),
+                    FixStep::command('Aplica el cambio.', 'sudo systemctl restart ssh'),
+                ]
             );
         }
 

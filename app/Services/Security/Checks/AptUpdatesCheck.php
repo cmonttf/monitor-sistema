@@ -3,6 +3,7 @@
 namespace App\Services\Security\Checks;
 
 use App\Services\Security\CheckResult;
+use App\Services\Security\FixStep;
 use Illuminate\Support\Str;
 
 /**
@@ -72,17 +73,41 @@ class AptUpdatesCheck extends SystemCheck
             $details[] = '… y ' . ($packages->count() - self::MAX_LISTED) . ' más';
         }
 
+        $packageNames = $packages->map(fn (string $line): string => Str::before($line, '/'))->values()->all();
+        $fix = $this->upgradeSteps($packageNames);
+
         if ($security->isNotEmpty()) {
             return CheckResult::critical(
                 "{$security->count()} actualizaciones de seguridad pendientes ({$packages->count()} en total).",
                 $details,
+                $fix,
             );
         }
 
         if ($packages->isNotEmpty()) {
-            return CheckResult::warning("{$packages->count()} paquetes pendientes de actualizar.", $details);
+            return CheckResult::warning("{$packages->count()} paquetes pendientes de actualizar.", $details, $fix);
         }
 
         return CheckResult::ok('Todos los paquetes están actualizados.');
+    }
+
+    /**
+     * Arma el comando que instala exactamente los paquetes pendientes. Se usa `apt install --only-upgrade`
+     * en vez de `apt upgrade` porque este último retiene ("kept back") los paquetes cuya nueva versión
+     * requiere instalar dependencias nuevas.
+     *
+     * @param list<string> $packageNames Nombres de los paquetes pendientes.
+     *
+     * @return list<FixStep> Pasos para actualizar.
+     */
+    private function upgradeSteps(array $packageNames): array
+    {
+        return [
+            FixStep::command(
+                'Instala todas las actualizaciones pendientes, incluidas las que «apt upgrade» deja retenidas.',
+                'sudo apt update && sudo apt install --only-upgrade ' . implode(' ', $packageNames)
+            ),
+            FixStep::note('Si alguna actualización lo pide, reinicia el equipo después de instalar.'),
+        ];
     }
 }

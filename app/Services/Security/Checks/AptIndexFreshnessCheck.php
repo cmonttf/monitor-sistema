@@ -3,6 +3,7 @@
 namespace App\Services\Security\Checks;
 
 use App\Services\Security\CheckResult;
+use App\Services\Security\FixStep;
 
 /**
  * Antigüedad de la última descarga exitosa de la lista de paquetes.
@@ -59,9 +60,17 @@ class AptIndexFreshnessCheck extends SystemCheck
         $days = (int) $updatedAt->diffInDays(now());
         $details = ['Última actualización: ' . $updatedAt->format('d-m-Y H:i')];
 
+        $staleMessage = "La lista de paquetes no se actualiza hace {$days} días.";
+        $fix = [
+                    FixStep::command('Descarga la lista de paquetes actualizada.', 'sudo apt update'),
+                    FixStep::note(
+                        'Si falla, revisa la conexión a internet y los repositorios en /etc/apt/sources.list.d/.'
+                    ),
+                ];
+
         return match (true) {
-            $days > 14 => CheckResult::critical("La lista de paquetes no se actualiza hace {$days} días.", $details),
-            $days > 3 => CheckResult::warning("La lista de paquetes no se actualiza hace {$days} días.", $details),
+            $days > 14 => CheckResult::critical($staleMessage, $details, $fix),
+            $days > 3 => CheckResult::warning($staleMessage, $details, $fix),
             default => CheckResult::ok('Lista de paquetes actualizada ' . $updatedAt->diffForHumans() . '.', $details),
         };
     }

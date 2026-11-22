@@ -3,6 +3,7 @@
 namespace App\Services\Security\Checks;
 
 use App\Services\Security\CheckResult;
+use App\Services\Security\FixStep;
 
 /**
  * Estado del cortafuegos UFW.
@@ -48,7 +49,13 @@ class FirewallCheck extends SystemCheck
         if (! $this->system->hasCommand('ufw')) {
             return CheckResult::critical(
                 'No hay cortafuegos UFW instalado.',
-                ['sudo apt install ufw && sudo ufw enable']
+                [],
+                [
+                    FixStep::command(
+                        'Instala y activa el cortafuegos (bloquea las conexiones entrantes por defecto).',
+                        'sudo apt install ufw && sudo ufw enable'
+                    ),
+                ]
             );
         }
 
@@ -61,7 +68,14 @@ class FirewallCheck extends SystemCheck
 
         return CheckResult::critical(
             'El cortafuegos está desactivado.',
-            ["Servicio: {$serviceState}", 'Activar con: sudo ufw enable']
+            ["Servicio: {$serviceState}"],
+            [
+                FixStep::command('Activa el cortafuegos y haz que arranque con el equipo.', 'sudo ufw enable'),
+                FixStep::command(
+                    'Si usas SSH para entrar al equipo, permítelo antes de activarlo.',
+                    'sudo ufw allow OpenSSH'
+                ),
+            ]
         );
     }
 }

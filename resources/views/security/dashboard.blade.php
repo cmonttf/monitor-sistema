@@ -109,7 +109,12 @@
             margin: 28px 0 10px;
         }
 
-        .grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); }
+        .grid {
+            display: grid;
+            gap: 12px;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            align-items: start;
+        }
 
         .card {
             background: var(--surface);
@@ -148,6 +153,41 @@
         summary { cursor: pointer; color: var(--muted); }
         details ul { margin: 6px 0 0; padding-left: 18px; }
         details li { word-break: break-word; font-family: ui-monospace, "Ubuntu Mono", monospace; }
+
+        .fix {
+            margin: 10px 0 0 44px;
+            padding: 10px 12px;
+            border-radius: 8px;
+            background: var(--status-soft);
+            font-size: .88rem;
+        }
+        .fix-title { font-weight: 600; color: var(--status); margin-bottom: 6px; }
+        .fix ol { margin: 0; padding-left: 20px; }
+        .fix li + li { margin-top: 8px; }
+        .command {
+            display: flex;
+            align-items: stretch;
+            margin-top: 4px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: var(--surface);
+            overflow: hidden;
+        }
+        .command code {
+            flex: 1;
+            padding: 6px 8px;
+            font-family: ui-monospace, "Ubuntu Mono", monospace;
+            font-size: .82rem;
+            overflow-wrap: anywhere;
+        }
+        .command button {
+            flex: none;
+            border: 0;
+            border-left: 1px solid var(--border);
+            border-radius: 0;
+            padding: 4px 10px;
+            font-size: .78rem;
+        }
 
         .status-ok { --status: var(--ok); --status-soft: var(--ok-soft); }
         .status-warning { --status: var(--warning); --status-soft: var(--warning-soft); }
@@ -197,10 +237,26 @@
         { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]
     ));
 
+    function renderFix(steps) {
+        if (!steps || !steps.length) {
+            return '';
+        }
+
+        const items = steps.map((step) => {
+            const command = step.command
+                ? `<div class="command"><code>${escapeHtml(step.command)}</code><button type="button" class="copy" data-command="${escapeHtml(step.command)}">Copiar</button></div>`
+                : '';
+            return `<li>${escapeHtml(step.text)}${command}</li>`;
+        }).join('');
+
+        return `<div class="fix"><div class="fix-title">Cómo solucionarlo</div><ol>${items}</ol></div>`;
+    }
+
     function renderCard(check) {
         const details = check.details.length
             ? `<details><summary>Detalles (${check.details.length})</summary><ul>${check.details.map((d) => `<li>${escapeHtml(d)}</li>`).join('')}</ul></details>`
             : '';
+        const fix = check.status === 'ok' ? '' : renderFix(check.fix);
 
         return `
             <article class="card status-${check.status}">
@@ -210,6 +266,7 @@
                     <span class="badge">${escapeHtml(check.label)}</span>
                 </div>
                 <p class="card-message">${escapeHtml(check.message)}</p>
+                ${fix}
                 ${details}
             </article>`;
     }
@@ -285,6 +342,22 @@
         }
     }
 
+    async function copyCommand(button) {
+        try {
+            await navigator.clipboard.writeText(button.dataset.command);
+            button.textContent = 'Copiado ✓';
+        } catch (e) {
+            button.textContent = 'Selecciona y copia';
+        }
+        setTimeout(() => { button.textContent = 'Copiar'; }, 2000);
+    }
+
+    document.getElementById('app').addEventListener('click', (event) => {
+        const button = event.target.closest('button.copy');
+        if (button) {
+            copyCommand(button);
+        }
+    });
     document.getElementById('refresh').addEventListener('click', () => load(true));
     setInterval(() => load(), REFRESH_MS);
     render();

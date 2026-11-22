@@ -3,6 +3,7 @@
 namespace App\Services\Security\Checks;
 
 use App\Services\Security\CheckResult;
+use App\Services\Security\FixStep;
 
 /**
  * Estado del arranque seguro UEFI.
@@ -40,14 +41,28 @@ class SecureBootCheck extends SystemCheck
     public function run(): CheckResult
     {
         if (! $this->system->hasCommand('mokutil')) {
-            return CheckResult::unknown('mokutil no está instalado.');
+            return CheckResult::unknown('mokutil no está instalado.', [], [
+                FixStep::command(
+                    'Instala la herramienta que informa el estado de Secure Boot.',
+                    'sudo apt install mokutil'
+                ),
+            ]);
         }
 
         $output = $this->system->run(['mokutil', '--sb-state'])->output();
 
         return match (true) {
             str_contains($output, 'SecureBoot enabled') => CheckResult::ok('Secure Boot está activado.'),
-            str_contains($output, 'SecureBoot disabled') => CheckResult::warning('Secure Boot está desactivado.'),
+            str_contains($output, 'SecureBoot disabled') => CheckResult::warning('Secure Boot está desactivado.', [], [
+                FixStep::note(
+                    'Reinicia y entra a la configuración UEFI/BIOS (normalmente con F2, F10, F12 o Supr al encender).'
+                ),
+                FixStep::note('Activa «Secure Boot» en la sección de seguridad o arranque, guarda y reinicia.'),
+                FixStep::note(
+                    'Si usas controladores externos (por ejemplo NVIDIA), Ubuntu puede pedirte registrar una clave '
+                        . 'MOK al reiniciar.'
+                ),
+            ]),
             default => CheckResult::unknown(
                 'No se pudo determinar el estado de Secure Boot.',
                 array_filter([trim($output)])

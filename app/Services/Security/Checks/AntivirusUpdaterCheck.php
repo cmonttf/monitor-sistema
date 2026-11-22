@@ -3,6 +3,7 @@
 namespace App\Services\Security\Checks;
 
 use App\Services\Security\CheckResult;
+use App\Services\Security\FixStep;
 
 /**
  * Servicio que descarga las firmas de ClamAV (freshclam).
@@ -40,19 +41,27 @@ class AntivirusUpdaterCheck extends SystemCheck
     public function run(): CheckResult
     {
         if (! $this->system->hasCommand('freshclam')) {
-            return CheckResult::unknown('freshclam no está instalado.');
+            return CheckResult::unknown('freshclam no está instalado.', [], [
+                FixStep::command('Instala el actualizador de firmas de ClamAV.', 'sudo apt install clamav-freshclam'),
+            ]);
         }
 
         $state = $this->system->serviceState('clamav-freshclam');
 
         return match ($state) {
             'active' => CheckResult::ok('El servicio freshclam está funcionando.'),
-            'failed' => CheckResult::critical('El servicio freshclam falló; las firmas no se actualizan.', [
-                'Diagnóstico: journalctl -u clamav-freshclam -n 30',
-                'Reiniciar: sudo systemctl restart clamav-freshclam',
+            'failed' => CheckResult::critical('El servicio freshclam falló; las firmas no se actualizan.', [], [
+                FixStep::command('Revisa por qué falló.', 'journalctl -u clamav-freshclam -n 30'),
+                FixStep::command(
+                    'Reinícialo.',
+                    'sudo systemctl reset-failed clamav-freshclam && sudo systemctl restart clamav-freshclam'
+                ),
             ]),
-            default => CheckResult::warning("El servicio freshclam no está activo ({$state}).", [
-                'Activar: sudo systemctl enable --now clamav-freshclam',
+            default => CheckResult::warning("El servicio freshclam no está activo ({$state}).", [], [
+                FixStep::command(
+                    'Actívalo y haz que arranque con el equipo.',
+                    'sudo systemctl enable --now clamav-freshclam'
+                ),
             ]),
         };
     }

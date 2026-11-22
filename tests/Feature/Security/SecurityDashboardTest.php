@@ -3,6 +3,7 @@
 namespace Tests\Feature\Security;
 
 use App\Services\Security\CheckResult;
+use App\Services\Security\FixStep;
 use RuntimeException;
 use Tests\TestCase;
 
@@ -72,6 +73,27 @@ class SecurityDashboardTest extends TestCase
             'label' => 'Crítico',
             'message' => 'Mal',
             'details' => ['detalle'],
+            'fix' => [],
+        ]);
+    }
+
+    /**
+     * Los pasos de solución llegan en el JSON con su explicación y su comando.
+     *
+     * @return void
+     */
+    public function test_status_endpoint_includes_fix_steps(): void
+    {
+        FakeCheck::$results = [CheckResult::warning('Regular', [], [
+            FixStep::command('Actualiza.', 'sudo apt upgrade'),
+            FixStep::note('Reinicia después.'),
+        ])];
+
+        $response = $this->getJson(route('security.status'));
+
+        $response->assertJsonPath('checks.0.fix', [
+            ['text' => 'Actualiza.', 'command' => 'sudo apt upgrade'],
+            ['text' => 'Reinicia después.', 'command' => null],
         ]);
     }
 

@@ -3,6 +3,7 @@
 namespace App\Services\Security\Checks;
 
 use App\Services\Security\CheckResult;
+use App\Services\Security\FixStep;
 
 /**
  * Detecta si hay un reinicio pendiente para aplicar actualizaciones o un kernel nuevo.
@@ -52,7 +53,10 @@ class RebootRequiredCheck extends SystemCheck
         if ($newest !== null && version_compare($newest, $running, '>')) {
             $details[] = "Kernel instalado más reciente: {$newest}";
 
-            return CheckResult::warning('Hay un kernel más nuevo instalado; reinicia para usarlo.', $details);
+            return CheckResult::warning('Hay un kernel más nuevo instalado; reinicia para usarlo.', $details, [
+                FixStep::note('Guarda tu trabajo y reinicia el equipo cuando puedas.'),
+                FixStep::command('O reinicia desde la terminal.', 'sudo reboot'),
+            ]);
         }
 
         if ($this->system->fileExists(self::FLAG)) {
@@ -60,7 +64,11 @@ class RebootRequiredCheck extends SystemCheck
 
             return CheckResult::warning(
                 'El sistema requiere reiniciarse para completar actualizaciones.',
-                [...$details, ...$packages]
+                [...$details, ...$packages],
+                [
+                    FixStep::note('Guarda tu trabajo y reinicia el equipo cuando puedas.'),
+                    FixStep::command('O reinicia desde la terminal.', 'sudo reboot'),
+                ]
             );
         }
 

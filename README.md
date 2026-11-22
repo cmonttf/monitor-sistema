@@ -28,7 +28,7 @@ Panel web local que muestra si los elementos de seguridad de un equipo Ubuntu es
 | Red | Servidor SSH | 🔴 si permite entrar como root, 🟠 si acepta contraseñas |
 | | Puertos abiertos a la red | 🟠 si algún puerto es accesible a través de UFW |
 
-Cada tarjeta muestra los detalles (paquetes, fechas, puertos) y, cuando corresponde, el comando para solucionar el problema.
+Cada tarjeta con problemas muestra una sección **Cómo solucionarlo** con los pasos a seguir y los comandos listos para copiar con un clic. Por ejemplo, la de APT arma el comando que instala exactamente los paquetes pendientes, incluidos los que `apt upgrade` deja retenidos. Los detalles (paquetes, fechas, puertos) se despliegan aparte.
 
 ## Requisitos
 
@@ -91,7 +91,7 @@ Los chequeos activos y su orden se definen en [`config/security-monitor.php`](co
 
 ## Agregar un chequeo
 
-1. Crea una clase en `app/Services/Security/Checks/` que extienda `SystemCheck` e implemente `name()`, `category()` y `run()`. `run()` devuelve un `CheckResult` (`ok`, `warning`, `critical` o `unknown`) con un mensaje y detalles opcionales.
+1. Crea una clase en `app/Services/Security/Checks/` que extienda `SystemCheck` e implemente `name()`, `category()` y `run()`. `run()` devuelve un `CheckResult` (`ok`, `warning`, `critical` o `unknown`) con un mensaje, detalles opcionales y, si hay un problema, los pasos para solucionarlo: `FixStep::command('Qué hace', 'comando')` o `FixStep::note('Indicación')`.
 2. Usa `$this->system` (`SystemInspector`) para ejecutar comandos y leer archivos; así el chequeo se puede probar con dobles.
 3. Regístrala en `config/security-monitor.php`.
 4. Agrega sus pruebas en `tests/Feature/Security/SecurityChecksTest.php`.
@@ -103,6 +103,7 @@ Un chequeo que lanza una excepción aparece como ⚪ sin detener a los demás.
 | Ruta | Contenido |
 |---|---|
 | `app/Services/Security/Checks/` | Un archivo por chequeo |
+| `app/Services/Security/CheckResult.php`, `FixStep.php` | Resultado de un chequeo y pasos para solucionarlo |
 | `app/Services/Security/SecurityMonitor.php` | Ejecuta los chequeos, calcula el estado global y guarda el reporte en caché |
 | `app/Services/Security/SystemInspector.php` | Acceso a comandos y archivos del sistema |
 | `app/Services/Security/UfwStatus.php` | Interpreta `ufw status verbose` y evalúa puertos contra las reglas |

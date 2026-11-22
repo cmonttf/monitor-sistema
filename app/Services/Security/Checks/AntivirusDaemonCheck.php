@@ -3,6 +3,7 @@
 namespace App\Services\Security\Checks;
 
 use App\Services\Security\CheckResult;
+use App\Services\Security\FixStep;
 
 /**
  * Servicio de escaneo en segundo plano de ClamAV (clamd).
@@ -41,7 +42,10 @@ class AntivirusDaemonCheck extends SystemCheck
     public function run(): CheckResult
     {
         if (! $this->system->hasCommand('clamd')) {
-            return CheckResult::unknown('clamav-daemon no está instalado.');
+            return CheckResult::unknown('clamav-daemon no está instalado.', [], [
+                FixStep::note('Sólo es necesario para escanear en segundo plano con clamdscan.'),
+                FixStep::command('Para instalarlo.', 'sudo apt install clamav-daemon'),
+            ]);
         }
 
         $state = $this->system->serviceState('clamav-daemon');
@@ -49,12 +53,24 @@ class AntivirusDaemonCheck extends SystemCheck
         return match ($state) {
             'active' => CheckResult::ok('El escáner clamd está funcionando.'),
             'activating' => CheckResult::ok('El escáner clamd está cargando las firmas.'),
-            'failed' => CheckResult::critical('El escáner clamd falló y no está escaneando.', [
-                'Diagnóstico: journalctl -u clamav-daemon -n 30',
-                'Reiniciar: sudo systemctl reset-failed clamav-daemon && sudo systemctl restart clamav-daemon',
+            'failed' => CheckResult::critical('El escáner clamd falló y no está escaneando.', [], [
+                FixStep::command(
+                    'Revisa por qué falló (un error de «database integrity» indica firmas dañadas o antiguas).',
+                    'journalctl -u clamav-daemon -n 30'
+                ),
+                FixStep::command(
+                    'Reinícialo.',
+                    'sudo systemctl reset-failed clamav-daemon && sudo systemctl restart clamav-daemon'
+                ),
             ]),
-            default => CheckResult::warning("El escáner clamd no está activo ({$state}).", [
-                'Activar: sudo systemctl enable --now clamav-daemon',
+            default => CheckResult::warning("El escáner clamd no está activo ({$state}).", [], [
+                FixStep::command(
+                    'Actívalo y haz que arranque con el equipo (usa unos 1 GB de RAM).',
+                    'sudo systemctl enable --now clamav-daemon clamav-daemon.socket'
+                ),
+                FixStep::note(
+                    'Si no escaneas en segundo plano, puedes dejarlo desactivado: las firmas se siguen actualizando.'
+                ),
             ]),
         };
     }

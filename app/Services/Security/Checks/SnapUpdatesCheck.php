@@ -3,6 +3,7 @@
 namespace App\Services\Security\Checks;
 
 use App\Services\Security\CheckResult;
+use App\Services\Security\FixStep;
 use Illuminate\Support\Str;
 
 /**
@@ -41,7 +42,10 @@ class SnapUpdatesCheck extends SystemCheck
     public function run(): CheckResult
     {
         if (! $this->system->hasCommand('snap')) {
-            return CheckResult::unknown('Snap no está instalado.');
+            return CheckResult::unknown('Snap no está instalado.', [], [
+                FixStep::note('No es necesario si no usas aplicaciones Snap.'),
+                FixStep::command('Para instalarlo.', 'sudo apt install snapd'),
+            ]);
         }
 
         $result = $this->system->run(['snap', 'refresh', '--list'], 30);
@@ -58,6 +62,12 @@ class SnapUpdatesCheck extends SystemCheck
 
         $snaps = array_map(fn (string $line): string => Str::before($line, ' '), array_slice($lines, 1));
 
-        return CheckResult::warning(count($snaps) . ' aplicaciones Snap pendientes de actualizar.', $snaps);
+        return CheckResult::warning(count($snaps) . ' aplicaciones Snap pendientes de actualizar.', $snaps, [
+                FixStep::command('Actualiza todas las aplicaciones Snap.', 'sudo snap refresh'),
+                FixStep::note(
+                    'Si una aplicación está abierta, Snap puede posponer su actualización: ciérrala y repite el '
+                        . 'comando.'
+                ),
+            ]);
     }
 }

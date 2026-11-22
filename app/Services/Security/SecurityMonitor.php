@@ -14,7 +14,8 @@ use Throwable;
  *
  * @phpstan-type CheckRow array{
  *     key: string, name: string, category: string, status: string,
- *     label: string, message: string, details: list<string>
+ *     label: string, message: string, details: list<string>,
+ *     fix: list<array{text: string, command: string|null}>
  * }
  * @phpstan-type Report array{
  *     generated_at: string, overall: array{status: string, label: string},
@@ -116,6 +117,7 @@ class SecurityMonitor
             'label' => $result->status->label(),
             'message' => $result->message,
             'details' => $result->details,
+            'fix' => array_map(fn (FixStep $step): array => $step->toArray(), $result->fix),
         ];
     }
 }
