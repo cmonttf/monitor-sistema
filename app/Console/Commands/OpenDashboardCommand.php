@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Services\Security\Platform;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
@@ -21,23 +22,31 @@ use Illuminate\Support\Sleep;
 class OpenDashboardCommand extends Command
 {
     /**
-     * Espera a que el servidor del monitor responda y abre el panel con xdg-open, desacoplado
-     * del proceso para que el navegador no quede atado al comando.
+     * Espera a que el servidor del monitor responda y abre el panel en el navegador predeterminado:
+     * en Linux con xdg-open, desacoplado del proceso; en Windows con «start».
+     *
+     * @param Platform $platform Plataforma en la que corre el monitor.
      *
      * @return int Código de salida: éxito, o fallo si el servidor no respondió a tiempo.
      */
-    public function handle(): int
+    public function handle(Platform $platform): int
     {
         $baseUrl = 'http://' . config('security-monitor.host') . ':' . config('security-monitor.port');
 
         if (! $this->waitForServer($baseUrl, (int) $this->option('wait'))) {
-            $this->components->error("El monitor no responde en {$baseUrl}. Revisa: systemctl --user status "
-                . InstallAutostartCommand::SERVICE_NAME);
+            $hint = $platform->isWindows()
+                ? 'vuelve a ejecutar «php artisan monitor:autostart»'
+                : 'revisa «systemctl --user status ' . InstallAutostartCommand::SERVICE_NAME . '»';
+            $this->components->error("El monitor no responde en {$baseUrl}; {$hint}.");
 
             return self::FAILURE;
         }
 
-        Process::run(['sh', '-c', 'setsid xdg-open "$1" >/dev/null 2>&1 &', 'sh', $baseUrl]);
+        if ($platform->isWindows()) {
+            Process::run(['cmd', '/c', 'start', '""', $baseUrl]);
+        } else {
+            Process::run(['sh', '-c', 'setsid xdg-open "$1" >/dev/null 2>&1 &', 'sh', $baseUrl]);
+        }
 
         return self::SUCCESS;
     }

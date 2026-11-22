@@ -3,6 +3,8 @@
 namespace App\Services\Security\Checks;
 
 use App\Services\Security\CheckResult;
+use App\Services\Security\FirewalldStatus;
+use App\Services\Security\FirewallRules;
 use App\Services\Security\FixStep;
 use App\Services\Security\UfwStatus;
 
@@ -65,13 +67,15 @@ class OpenPortsCheck extends SystemCheck
             return CheckResult::ok('Ningún servicio escucha fuera del equipo.');
         }
 
-        $firewall = $this->firewallStatus();
+        $usesFirewalld = $this->system->hasCommand('firewall-cmd') && ! $this->system->hasCommand('ufw');
+        $firewall = $usesFirewalld ? $this->firewalldStatus() : $this->ufwStatus();
 
         if ($firewall === null) {
             return CheckResult::warning(
-                count($listeners) . ' puertos TCP escuchan en la red (no se pudieron leer las reglas de UFW).',
+                count($listeners) . ' puertos TCP escuchan en la red (no se pudieron leer las reglas de '
+                    . ($usesFirewalld ? 'firewalld' : 'UFW') . ').',
                 array_map(fn (int $port): string => "{$port}/tcp", array_keys($listeners)),
-                $this->sudoersSteps()
+                $usesFirewalld ? $this->firewalldUnreadableSteps() : $this->sudoersSteps()
             );
         }
 
@@ -95,7 +99,7 @@ class OpenPortsCheck extends SystemCheck
             return CheckResult::warning(
                 count($open) . ' puertos son accesibles desde la red a través del cortafuegos.',
                 [...$open, ...$blocked],
-                $this->closePortsSteps($openVerdicts)
+                $firewall->closeSteps($openVerdicts)
             );
         }
 
@@ -150,11 +154,60 @@ class OpenPortsCheck extends SystemCheck
      *
      * @return UfwStatus|null Estado interpretado, o null si falta el permiso o la salida no se reconoce.
      */
-    private function firewallStatus(): ?UfwStatus
+    private function ufwStatus(): ?UfwStatus
     {
         $result = $this->system->run(['sudo', '-n', ...self::UFW_COMMAND]);
 
         return $result->successful() ? UfwStatus::parse($result->output(), $this->appProfiles()) : null;
+    }
+
+    /**
+     * Lee la zona por defecto de firewalld con sus puertos y servicios permitidos. Las consultas de
+     * firewall-cmd no requieren privilegios en una sesión de escritorio.
+     *
+     * @return FirewallRules|null Estado interpretado, o null si alguna consulta falló.
+     */
+    private function firewalldStatus(): ?FirewallRules
+    {
+        if (trim($this->system->run(['firewall-cmd', '--state'])->output()) !== 'running') {
+            return new FirewalldStatus(false);
+        }
+
+        $zoneResult = $this->system->run(['firewall-cmd', '--get-default-zone']);
+        $zone = trim($zoneResult->output());
+        $portsResult = $this->system->run(['firewall-cmd', "--zone={$zone}", '--list-ports']);
+        $servicesResult = $this->system->run(['firewall-cmd', "--zone={$zone}", '--list-services']);
+
+        if ($zoneResult->failed() || $portsResult->failed() || $servicesResult->failed()) {
+            return null;
+        }
+
+        $services = [];
+
+        foreach (array_filter(explode(' ', trim($servicesResult->output()))) as $service) {
+            $info = $this->system->run(['firewall-cmd', "--info-service={$service}"])->output();
+            $services[$service] = FirewalldStatus::parseServicePorts($info);
+        }
+
+        return new FirewalldStatus(
+            true,
+            $zone,
+            array_values(array_filter(explode(' ', trim($portsResult->output())))),
+            $services
+        );
+    }
+
+    /**
+     * Pasos cuando no se pudieron consultar las reglas de firewalld.
+     *
+     * @return list<FixStep> Pasos para revisar las reglas a mano.
+     */
+    private function firewalldUnreadableSteps(): array
+    {
+        return [
+            FixStep::command('Revisa las reglas de la zona activa.', 'sudo firewall-cmd --list-all'),
+            FixStep::command('Identifica qué programa usa cada puerto.', 'sudo ss -tlnp'),
+        ];
     }
 
     /**
@@ -181,44 +234,6 @@ class OpenPortsCheck extends SystemCheck
         }
 
         return $profiles;
-    }
-
-    /**
-     * Arma los pasos para cerrar los puertos accesibles según qué los dejó abiertos: el cortafuegos
-     * desactivado, la política por defecto o reglas concretas.
-     *
-     * @param list<array{allowed: bool, reason: string, source: string, rule: string|null}> $openVerdicts Veredictos.
-     *
-     * @return list<FixStep> Pasos para cerrar los puertos.
-     */
-    private function closePortsSteps(array $openVerdicts): array
-    {
-        $sources = array_column($openVerdicts, 'source');
-        $rules = array_values(array_unique(array_filter(array_column($openVerdicts, 'rule'))));
-        $steps = [FixStep::command('Identifica qué programa usa cada puerto.', 'sudo ss -tlnp')];
-
-        if (in_array('inactive', $sources, true)) {
-            $steps[] = FixStep::command('Activa el cortafuegos.', 'sudo ufw enable');
-        }
-
-        if (in_array('default', $sources, true)) {
-            $steps[] = FixStep::command(
-                'Bloquea por defecto las conexiones entrantes.',
-                'sudo ufw default deny incoming'
-            );
-        }
-
-        if ($rules !== []) {
-            $steps[] = FixStep::command('Lista las reglas del cortafuegos con su número.', 'sudo ufw status numbered');
-            $steps[] = FixStep::note(
-                'Si no necesitas ese acceso, elimina la regla «' . implode('», «', $rules)
-                . '» con «sudo ufw delete <número>» (sus copias IPv4 e IPv6 tienen números distintos).'
-            );
-        }
-
-        $steps[] = FixStep::note('Si un servicio sólo se usa en este equipo, configúralo para escuchar en 127.0.0.1.');
-
-        return $steps;
     }
 
     /**

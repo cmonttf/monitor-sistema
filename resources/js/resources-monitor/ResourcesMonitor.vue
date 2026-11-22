@@ -185,7 +185,7 @@ onBeforeUnmount(() => clearInterval(timer));
                 <UsageMeter :percent="memoryPercent" :level="memoryLevel" label="RAM en uso" />
                 <dl class="resource-facts">
                     <div><dt>Disponible</dt><dd>{{ formatBytes(memory.available) }}</dd></div>
-                    <div><dt>Caché liberable</dt><dd>{{ formatBytes(memory.cached) }}</dd></div>
+                    <div v-if="memory.cached !== null"><dt>Caché liberable</dt><dd>{{ formatBytes(memory.cached) }}</dd></div>
                     <div><dt>Swap</dt><dd>{{ swapLabel }}</dd></div>
                 </dl>
             </template>

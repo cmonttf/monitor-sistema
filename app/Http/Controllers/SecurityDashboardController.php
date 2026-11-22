@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Services\Security\Checks\DiskSpaceCheck;
 use App\Services\Security\Checks\MemoryCheck;
+use App\Services\Security\Platform;
 use App\Services\Security\ResourceSampler;
 use App\Services\Security\SecurityMonitor;
 use Illuminate\Http\JsonResponse;
@@ -68,18 +69,19 @@ class SecurityDashboardController extends Controller
      * El panel la consulta cada pocos segundos para el gráfico de RAM en tiempo real.
      *
      * @param ResourceSampler $resources Lector de memoria y discos.
+     * @param Platform        $platform  Plataforma en la que corre el monitor.
      *
      * @return JsonResponse Muestra con fecha, memoria, discos y filas de los chequeos de recursos.
      */
-    public function resources(ResourceSampler $resources): JsonResponse
+    public function resources(ResourceSampler $resources, Platform $platform): JsonResponse
     {
         return response()->json([
             'sampled_at' => now()->toIso8601String(),
             'memory' => $resources->memory(),
             'disks' => $resources->disks(),
             'checks' => [
-                $this->monitor->checkRow(new MemoryCheck($resources)),
-                $this->monitor->checkRow(new DiskSpaceCheck($resources)),
+                $this->monitor->checkRow(new MemoryCheck($resources, $platform)),
+                $this->monitor->checkRow(new DiskSpaceCheck($resources, $platform)),
             ],
         ]);
     }

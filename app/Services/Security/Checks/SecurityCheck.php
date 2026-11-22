@@ -3,6 +3,7 @@
 namespace App\Services\Security\Checks;
 
 use App\Services\Security\CheckResult;
+use App\Services\Security\Platform;
 
 /**
  * Contrato de un chequeo de seguridad mostrado en el monitor.
@@ -32,4 +33,13 @@ interface SecurityCheck
      * @return CheckResult
      */
     public function run(): CheckResult;
+
+    /**
+     * Indica si el chequeo aplica a la plataforma; los que no aplican no se muestran.
+     *
+     * @param Platform $platform Plataforma en la que corre el monitor.
+     *
+     * @return bool true si el chequeo debe ejecutarse.
+     */
+    public function supports(Platform $platform): bool;
 }

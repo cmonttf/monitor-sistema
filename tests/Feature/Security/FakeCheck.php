@@ -4,6 +4,7 @@ namespace Tests\Feature\Security;
 
 use App\Services\Security\CheckResult;
 use App\Services\Security\Checks\SecurityCheck;
+use App\Services\Security\Platform;
 use Throwable;
 
 /**
@@ -39,6 +40,18 @@ class FakeCheck implements SecurityCheck
     public function category(): string
     {
         return 'Pruebas';
+    }
+
+    /**
+     * El chequeo de prueba aplica a cualquier plataforma.
+     *
+     * @param Platform $platform Plataforma en la que corre el monitor.
+     *
+     * @return bool Siempre true.
+     */
+    public function supports(Platform $platform): bool
+    {
+        return true;
     }
 
     /**

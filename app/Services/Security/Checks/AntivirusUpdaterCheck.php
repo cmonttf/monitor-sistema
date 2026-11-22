@@ -2,6 +2,7 @@
 
 namespace App\Services\Security\Checks;
 
+use App\Enums\LinuxFamily;
 use App\Services\Security\CheckResult;
 use App\Services\Security\FixStep;
 
@@ -42,7 +43,10 @@ class AntivirusUpdaterCheck extends SystemCheck
     {
         if (! $this->system->hasCommand('freshclam')) {
             return CheckResult::unknown('freshclam no está instalado.', [], [
-                FixStep::command('Instala el actualizador de firmas de ClamAV.', 'sudo apt install clamav-freshclam'),
+                $this->platform->installStep(
+                    'Instala el actualizador de firmas de ClamAV.',
+                    $this->platform->family === LinuxFamily::RedHat ? 'clamav-update' : 'clamav-freshclam'
+                ),
             ]);
         }
 

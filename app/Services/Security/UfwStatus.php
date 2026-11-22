@@ -6,13 +6,13 @@ namespace App\Services\Security;
  * Interpreta la salida de `ufw status verbose` y decide si un puerto
  * es alcanzable desde la red (primera regla que coincide, como UFW).
  *
- * @phpstan-type Rule array{to: string, action: string, from: string, v6: bool}
- * @phpstan-type Verdict array{allowed: bool, reason: string, source: 'inactive'|'rule'|'default', rule: string|null}
+ * @phpstan-type        Rule array{to: string, action: string, from: string, v6: bool}
+ * @phpstan-import-type Verdict from FirewallRules
  *
  * @package App\Services\Security
  * @author  Camilo Montt <cmonttf@gmail.com>
  */
-final readonly class UfwStatus
+final readonly class UfwStatus implements FirewallRules
 {
     /**
      * Expresión de una especificación de puertos de UFW: "80", "80,443/tcp" o "8000:8100/udp".
@@ -125,6 +125,44 @@ final readonly class UfwStatus
             'source' => 'default',
             'rule' => null,
         ];
+    }
+
+    /**
+     * Arma los pasos para cerrar los puertos accesibles según qué los dejó abiertos: el cortafuegos
+     * desactivado, la política por defecto o reglas concretas.
+     *
+     * @param list<Verdict> $openVerdicts Veredictos de los puertos accesibles.
+     *
+     * @return list<FixStep> Pasos para cerrar los puertos.
+     */
+    public function closeSteps(array $openVerdicts): array
+    {
+        $sources = array_column($openVerdicts, 'source');
+        $rules = array_values(array_unique(array_filter(array_column($openVerdicts, 'rule'))));
+        $steps = [FixStep::command('Identifica qué programa usa cada puerto.', 'sudo ss -tlnp')];
+
+        if (in_array('inactive', $sources, true)) {
+            $steps[] = FixStep::command('Activa el cortafuegos.', 'sudo ufw enable');
+        }
+
+        if (in_array('default', $sources, true)) {
+            $steps[] = FixStep::command(
+                'Bloquea por defecto las conexiones entrantes.',
+                'sudo ufw default deny incoming'
+            );
+        }
+
+        if ($rules !== []) {
+            $steps[] = FixStep::command('Lista las reglas del cortafuegos con su número.', 'sudo ufw status numbered');
+            $steps[] = FixStep::note(
+                'Si no necesitas ese acceso, elimina la regla «' . implode('», «', $rules)
+                . '» con «sudo ufw delete <número>» (sus copias IPv4 e IPv6 tienen números distintos).'
+            );
+        }
+
+        $steps[] = FixStep::note('Si un servicio sólo se usa en este equipo, configúralo para escuchar en 127.0.0.1.');
+
+        return $steps;
     }
 
     /**

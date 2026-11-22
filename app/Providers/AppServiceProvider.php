@@ -2,6 +2,8 @@
 
 namespace App\Providers;
 
+use App\Services\Security\Platform;
+use App\Services\Security\PlatformDetector;
 use Illuminate\Support\ServiceProvider;
 
 /**
@@ -13,13 +15,14 @@ use Illuminate\Support\ServiceProvider;
 class AppServiceProvider extends ServiceProvider
 {
     /**
-     * Registra servicios de la aplicación (sin registros propios por ahora).
+     * Registra la plataforma detectada (sistema operativo y familia Linux) como instancia única,
+     * para que todos los chequeos de una solicitud compartan la misma detección.
      *
      * @return void
      */
     public function register(): void
     {
-        //
+        $this->app->singleton(Platform::class, fn (): Platform => $this->app->make(PlatformDetector::class)->detect());
     }
 
     /**

@@ -62,7 +62,7 @@ class DiskEncryptionCheck extends SystemCheck
             [],
             [
                 FixStep::note(
-                    'Cifrar el disco del sistema requiere reinstalar Ubuntu eligiendo «Cifrar el disco» (LUKS) en el '
+                    'Cifrar el disco del sistema requiere reinstalar el sistema eligiendo cifrar el disco (LUKS) en el '
                         . 'instalador.'
                 ),
                 FixStep::note('Antes de reinstalar, respalda tus datos en un disco externo.'),

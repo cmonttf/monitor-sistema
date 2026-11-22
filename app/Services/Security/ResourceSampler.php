@@ -3,10 +3,12 @@
 namespace App\Services\Security;
 
 /**
- * Lee el uso de memoria y de espacio en disco del equipo.
+ * Lee el uso de memoria y de espacio en disco del equipo, en Linux (/proc/meminfo y df) o en Windows
+ * (CIM con PowerShell). Las lecturas se guardan durante la vida del objeto para no repetirlas en una
+ * misma solicitud.
  *
  * @phpstan-type MemorySample array{
- *     total: int, used: int, available: int, cached: int, swap_total: int, swap_used: int
+ *     total: int, used: int, available: int, cached: int|null, swap_total: int, swap_used: int
  * }
  * @phpstan-type DiskSample array{
  *     device: string, mount: string, fstype: string, size: int, used: int, available: int, used_percent: float
@@ -30,11 +32,57 @@ class ResourceSampler
     ];
 
     /**
-     * Recibe el acceso al sistema operativo.
-     *
-     * @param SystemInspector $system Acceso a comandos y archivos del sistema.
+     * Lee en Windows, con una sola llamada, la memoria (en kB y MB según la clase CIM) y las unidades fijas.
      */
-    public function __construct(private SystemInspector $system)
+    private const string WINDOWS_SCRIPT = <<<'PS'
+        $os = Get-CimInstance Win32_OperatingSystem
+        $pages = @(Get-CimInstance Win32_PageFileUsage)
+        [pscustomobject]@{
+            memory = [pscustomobject]@{
+                total = [int64]$os.TotalVisibleMemorySize * 1024
+                available = [int64]$os.FreePhysicalMemory * 1024
+                swapTotal = [int64](($pages | Measure-Object -Property AllocatedBaseSize -Sum).Sum) * 1MB
+                swapUsed = [int64](($pages | Measure-Object -Property CurrentUsage -Sum).Sum) * 1MB
+            }
+            disks = @(Get-CimInstance Win32_LogicalDisk -Filter 'DriveType=3' | ForEach-Object {
+                [pscustomobject]@{
+                    device = $_.DeviceID
+                    fstype = [string]$_.FileSystem
+                    size = [int64]$_.Size
+                    available = [int64]$_.FreeSpace
+                }
+            })
+        }
+        PS;
+
+    /**
+     * Última lectura de memoria (false si aún no se ha leído).
+     *
+     * @var MemorySample|null|false
+     */
+    private array|null|false $memorySample = false;
+
+    /**
+     * Última lectura de discos (null si aún no se ha leído).
+     *
+     * @var list<DiskSample>|null
+     */
+    private ?array $diskSample = null;
+
+    /**
+     * Último resultado del script de Windows (null si aún no se ha ejecutado).
+     *
+     * @var array<string, mixed>|null
+     */
+    private ?array $windowsData = null;
+
+    /**
+     * Recibe el acceso al sistema operativo y la plataforma.
+     *
+     * @param SystemInspector $system   Acceso a comandos y archivos del sistema.
+     * @param Platform        $platform Plataforma en la que corre el monitor.
+     */
+    public function __construct(private SystemInspector $system, private Platform $platform)
     {
     }
 
@@ -42,9 +90,23 @@ class ResourceSampler
      * Lee el uso de memoria RAM y swap desde /proc/meminfo. La RAM usada se calcula como el total
      * menos la disponible (MemAvailable), que ya descuenta la caché que el kernel puede liberar.
      *
-     * @return MemorySample|null Bytes de cada medida, o null si no se pudo leer /proc/meminfo.
+     * @return MemorySample|null Bytes de cada medida, o null si no se pudo leer.
      */
     public function memory(): ?array
+    {
+        if ($this->memorySample === false) {
+            $this->memorySample = $this->platform->isWindows() ? $this->windowsMemory() : $this->linuxMemory();
+        }
+
+        return $this->memorySample;
+    }
+
+    /**
+     * Lee la memoria en Linux desde /proc/meminfo.
+     *
+     * @return MemorySample|null Bytes de cada medida, o null si no se pudo leer.
+     */
+    private function linuxMemory(): ?array
     {
         $contents = $this->system->readFile(self::MEMINFO);
 
@@ -72,9 +134,19 @@ class ResourceSampler
     /**
      * Lee el espacio de los sistemas de archivos de discos reales con `df`, una vez por dispositivo.
      *
-     * @return list<DiskSample> Discos montados, en el orden que entrega df.
+     * @return list<DiskSample> Discos montados, en el orden del sistema.
      */
     public function disks(): array
+    {
+        return $this->diskSample ??= $this->platform->isWindows() ? $this->windowsDisks() : $this->linuxDisks();
+    }
+
+    /**
+     * Lee el espacio de los discos en Linux con df.
+     *
+     * @return list<DiskSample> Discos montados, en el orden que entrega df.
+     */
+    private function linuxDisks(): array
     {
         $result = $this->system->run(['df', '-B1', '--output=source,fstype,size,used,avail,target']);
 
@@ -111,6 +183,70 @@ class ResourceSampler
         }
 
         return array_values($disks);
+    }
+
+    /**
+     * Lee la memoria en Windows. Windows no expone una caché liberable equivalente, por eso queda en null.
+     *
+     * @return MemorySample|null Bytes de cada medida, o null si no se pudo leer.
+     */
+    private function windowsMemory(): ?array
+    {
+        $memory = $this->windowsSample()['memory'] ?? null;
+
+        if (! is_array($memory) || (int) ($memory['total'] ?? 0) === 0) {
+            return null;
+        }
+
+        return [
+            'total' => (int) $memory['total'],
+            'used' => (int) $memory['total'] - (int) $memory['available'],
+            'available' => (int) $memory['available'],
+            'cached' => null,
+            'swap_total' => (int) $memory['swapTotal'],
+            'swap_used' => (int) $memory['swapUsed'],
+        ];
+    }
+
+    /**
+     * Lee las unidades locales fijas de Windows.
+     *
+     * @return list<DiskSample> Unidades, en orden de letra.
+     */
+    private function windowsDisks(): array
+    {
+        $disks = [];
+
+        foreach ($this->windowsSample()['disks'] ?? [] as $disk) {
+            $size = (int) ($disk['size'] ?? 0);
+            $available = (int) ($disk['available'] ?? 0);
+
+            if ($size === 0) {
+                continue;
+            }
+
+            $disks[] = [
+                'device' => (string) $disk['device'],
+                'mount' => (string) $disk['device'],
+                'fstype' => (string) ($disk['fstype'] ?? ''),
+                'size' => $size,
+                'used' => $size - $available,
+                'available' => $available,
+                'used_percent' => round(($size - $available) / $size * 100, 1),
+            ];
+        }
+
+        return $disks;
+    }
+
+    /**
+     * Ejecuta una vez el script de Windows que lee memoria y discos.
+     *
+     * @return array<string, mixed> Resultado decodificado (vacío si falló).
+     */
+    private function windowsSample(): array
+    {
+        return $this->windowsData ??= $this->system->powershell(self::WINDOWS_SCRIPT) ?? [];
     }
 
     /**

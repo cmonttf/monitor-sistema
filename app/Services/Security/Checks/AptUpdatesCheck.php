@@ -2,8 +2,10 @@
 
 namespace App\Services\Security\Checks;
 
+use App\Enums\LinuxFamily;
 use App\Services\Security\CheckResult;
 use App\Services\Security\FixStep;
+use App\Services\Security\Platform;
 use Illuminate\Support\Str;
 
 /**
@@ -37,6 +39,18 @@ class AptUpdatesCheck extends SystemCheck
     public function category(): string
     {
         return 'Actualizaciones';
+    }
+
+    /**
+     * Aplica sólo a la familia Debian/Ubuntu, que usa APT.
+     *
+     * @param Platform $platform Plataforma en la que corre el monitor.
+     *
+     * @return bool true en Debian, Ubuntu y derivadas.
+     */
+    public function supports(Platform $platform): bool
+    {
+        return $platform->isLinux(LinuxFamily::Debian);
     }
 
     /**

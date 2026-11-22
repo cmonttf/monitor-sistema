@@ -44,7 +44,6 @@ class SnapUpdatesCheck extends SystemCheck
         if (! $this->system->hasCommand('snap')) {
             return CheckResult::unknown('Snap no está instalado.', [], [
                 FixStep::note('No es necesario si no usas aplicaciones Snap.'),
-                FixStep::command('Para instalarlo.', 'sudo apt install snapd'),
             ]);
         }
 

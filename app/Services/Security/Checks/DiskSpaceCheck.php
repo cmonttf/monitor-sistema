@@ -3,8 +3,10 @@
 namespace App\Services\Security\Checks;
 
 use App\Enums\CheckStatus;
+use App\Enums\LinuxFamily;
 use App\Services\Security\CheckResult;
 use App\Services\Security\FixStep;
+use App\Services\Security\Platform;
 use App\Services\Security\ResourceSampler;
 
 /**
@@ -37,11 +39,12 @@ class DiskSpaceCheck implements SecurityCheck
     public const int ABSOLUTE_THRESHOLD_MIN_SIZE = 10 * 1024 ** 3;
 
     /**
-     * Recibe el lector de uso de recursos.
+     * Recibe el lector de uso de recursos y la plataforma.
      *
      * @param ResourceSampler $resources Lector de memoria y discos.
+     * @param Platform        $platform  Plataforma en la que corre el monitor.
      */
-    public function __construct(private ResourceSampler $resources)
+    public function __construct(private ResourceSampler $resources, private Platform $platform)
     {
     }
 
@@ -63,6 +66,18 @@ class DiskSpaceCheck implements SecurityCheck
     public function category(): string
     {
         return 'Recursos';
+    }
+
+    /**
+     * Aplica a Linux y a Windows.
+     *
+     * @param Platform $platform Plataforma en la que corre el monitor.
+     *
+     * @return bool true en Linux y Windows.
+     */
+    public function supports(Platform $platform): bool
+    {
+        return $platform->isLinux() || $platform->isWindows();
     }
 
     /**
@@ -144,17 +159,47 @@ class DiskSpaceCheck implements SecurityCheck
      */
     private function fixSteps(string $mount): array
     {
+        if ($this->platform->isWindows()) {
+            return [
+                FixStep::command(
+                    'Abre el Sensor de almacenamiento para liberar espacio.',
+                    'start ms-settings:storagesense'
+                ),
+                FixStep::command(
+                    'O usa el Liberador de espacio en disco (incluye «Limpiar archivos del sistema»).',
+                    'cleanmgr'
+                ),
+                FixStep::note("Revisa en {$mount} las carpetas Descargas, la papelera y los programas que no uses."),
+            ];
+        }
+
         return [
             FixStep::command(
                 'Encuentra las carpetas que más ocupan.',
                 "sudo du -xh --max-depth=2 {$mount} 2>/dev/null | sort -h | tail -n 20"
             ),
-            FixStep::command(
-                'Borra la caché de paquetes y los paquetes que ya no se usan.',
-                'sudo apt clean && sudo apt autoremove --purge'
-            ),
+            ...$this->packageCleanupSteps(),
             FixStep::command('Reduce los registros del sistema a 200 MB.', 'sudo journalctl --vacuum-size=200M'),
             FixStep::note('Vacía la papelera y revisa la carpeta Descargas.'),
         ];
+    }
+
+    /**
+     * Pasos para borrar la caché del gestor de paquetes de la distribución.
+     *
+     * @return list<FixStep> Pasos de limpieza (vacío si la distribución no se reconoce).
+     */
+    private function packageCleanupSteps(): array
+    {
+        $command = match ($this->platform->family) {
+            LinuxFamily::Debian => 'sudo apt clean && sudo apt autoremove --purge',
+            LinuxFamily::RedHat => 'sudo dnf clean all && sudo dnf autoremove',
+            LinuxFamily::Arch => 'sudo pacman -Sc',
+            default => null,
+        };
+
+        return $command === null
+            ? []
+            : [FixStep::command('Borra la caché de paquetes y los paquetes que ya no se usan.', $command)];
     }
 }

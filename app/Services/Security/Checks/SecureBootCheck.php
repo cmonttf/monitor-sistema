@@ -42,10 +42,7 @@ class SecureBootCheck extends SystemCheck
     {
         if (! $this->system->hasCommand('mokutil')) {
             return CheckResult::unknown('mokutil no está instalado.', [], [
-                FixStep::command(
-                    'Instala la herramienta que informa el estado de Secure Boot.',
-                    'sudo apt install mokutil'
-                ),
+                $this->platform->installStep('Instala la herramienta que informa el estado de Secure Boot.', 'mokutil'),
             ]);
         }
 
@@ -59,8 +56,8 @@ class SecureBootCheck extends SystemCheck
                 ),
                 FixStep::note('Activa «Secure Boot» en la sección de seguridad o arranque, guarda y reinicia.'),
                 FixStep::note(
-                    'Si usas controladores externos (por ejemplo NVIDIA), Ubuntu puede pedirte registrar una clave '
-                        . 'MOK al reiniciar.'
+                    'Si usas controladores externos (por ejemplo NVIDIA), la distribución puede pedirte '
+                        . 'registrar una clave MOK al reiniciar.'
                 ),
             ]),
             default => CheckResult::unknown(

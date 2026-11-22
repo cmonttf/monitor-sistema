@@ -2,6 +2,7 @@
 
 namespace App\Services\Security\Checks;
 
+use App\Enums\LinuxFamily;
 use App\Services\Security\CheckResult;
 use App\Services\Security\FixStep;
 use Carbon\CarbonImmutable;
@@ -58,9 +59,13 @@ class AntivirusSignaturesCheck extends SystemCheck
                 'No hay antivirus ClamAV instalado.',
                 [],
                 [
-                    FixStep::command(
+                    $this->platform->installStep(
                         'Instala ClamAV y su actualizador de firmas.',
-                        'sudo apt install clamav clamav-freshclam'
+                        ...match ($this->platform->family) {
+                            LinuxFamily::RedHat => ['clamav', 'clamav-update'],
+                            LinuxFamily::Arch => ['clamav'],
+                            default => ['clamav', 'clamav-freshclam'],
+                        }
                     ),
                 ]
             );

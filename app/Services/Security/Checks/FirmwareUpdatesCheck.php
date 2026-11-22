@@ -42,7 +42,7 @@ class FirmwareUpdatesCheck extends SystemCheck
     {
         if (! $this->system->hasCommand('fwupdmgr')) {
             return CheckResult::unknown('fwupd no está instalado.', [], [
-                FixStep::command('Instala el gestor de actualizaciones de firmware.', 'sudo apt install fwupd'),
+                $this->platform->installStep('Instala el gestor de actualizaciones de firmware.', 'fwupd'),
             ]);
         }
 

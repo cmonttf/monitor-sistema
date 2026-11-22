@@ -41,7 +41,9 @@ class SshServerCheck extends SystemCheck
      */
     public function run(): CheckResult
     {
-        if ($this->system->serviceState('ssh') !== 'active') {
+        $service = $this->activeService();
+
+        if ($service === null) {
             return CheckResult::ok('El servidor SSH no está activo.');
         }
 
@@ -59,10 +61,10 @@ class SshServerCheck extends SystemCheck
                         'Edita la configuración y cambia la línea a «PermitRootLogin no».',
                         'sudoedit /etc/ssh/sshd_config'
                     ),
-                    FixStep::command('Aplica el cambio.', 'sudo systemctl restart ssh'),
+                    FixStep::command('Aplica el cambio.', "sudo systemctl restart {$service}"),
                     FixStep::command(
                         'Si no necesitas entrar a este equipo por SSH, desactívalo.',
-                        'sudo systemctl disable --now ssh'
+                        "sudo systemctl disable --now {$service}"
                     ),
                 ]
             );
@@ -80,11 +82,27 @@ class SshServerCheck extends SystemCheck
                         'Luego cambia la línea a «PasswordAuthentication no».',
                         'sudoedit /etc/ssh/sshd_config'
                     ),
-                    FixStep::command('Aplica el cambio.', 'sudo systemctl restart ssh'),
+                    FixStep::command('Aplica el cambio.', "sudo systemctl restart {$service}"),
                 ]
             );
         }
 
         return CheckResult::ok('SSH activo con configuración restringida.');
+    }
+
+    /**
+     * Busca el servicio del servidor SSH activo: "ssh" en Debian/Ubuntu y "sshd" en Fedora, RHEL y Arch.
+     *
+     * @return string|null Nombre del servicio activo, o null si ninguno lo está.
+     */
+    private function activeService(): ?string
+    {
+        foreach (['ssh', 'sshd'] as $service) {
+            if ($this->system->serviceState($service) === 'active') {
+                return $service;
+            }
+        }
+
+        return null;
     }
 }

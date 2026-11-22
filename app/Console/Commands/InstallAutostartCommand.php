@@ -2,6 +2,8 @@
 
 namespace App\Console\Commands;
 
+use App\Services\Security\Platform;
+use App\Services\Security\WindowsAutostart;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
@@ -9,9 +11,9 @@ use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Process;
 
 /**
- * Instala (o elimina) el arranque automático del monitor para el usuario actual:
- * un servicio systemd de usuario que levanta el servidor y una entrada de
- * autoarranque del escritorio que abre el panel en el navegador al iniciar sesión.
+ * Instala (o elimina) el arranque automático del monitor para el usuario actual. En Linux: un servicio
+ * systemd de usuario que levanta el servidor y una entrada de autoarranque del escritorio que abre el
+ * panel. En Windows: un script de PowerShell y accesos directos en las carpetas Inicio y menú Inicio.
  *
  * @package App\Console\Commands
  * @author  Camilo Montt <cmonttf@gmail.com>
@@ -31,18 +33,87 @@ class InstallAutostartCommand extends Command
     public const string DESKTOP_NAME = 'monitor-seguridad.desktop';
 
     /**
-     * Instala o, con --remove, desinstala el arranque automático.
+     * Instala o, con --remove, desinstala el arranque automático según el sistema operativo.
+     *
+     * @param Platform         $platform Plataforma en la que corre el monitor.
+     * @param WindowsAutostart $windows  Instalador del arranque automático de Windows.
      *
      * @return int Código de salida.
      */
-    public function handle(): int
+    public function handle(Platform $platform, WindowsAutostart $windows): int
     {
+        if ($platform->isWindows()) {
+            return $this->option('remove') ? $this->uninstallWindows($windows) : $this->installWindows($windows);
+        }
+
+        if (! $platform->isLinux()) {
+            $this->components->error('El arranque automático sólo está disponible en Linux y Windows.');
+
+            return self::FAILURE;
+        }
+
         return $this->option('remove') ? $this->uninstall() : $this->install();
     }
 
     /**
-     * Escribe la unidad systemd, la entrada de autoarranque y el lanzador, y habilita y reinicia
-     * el servicio.
+     * Crea el script lanzador y los accesos directos de Windows, y levanta el monitor.
+     *
+     * @param WindowsAutostart $windows Instalador del arranque automático de Windows.
+     *
+     * @return int Código de salida.
+     */
+    private function installWindows(WindowsAutostart $windows): int
+    {
+        $isInstalled = false;
+
+        $this->components->task('Accesos directos en Inicio', function () use ($windows, &$isInstalled): bool {
+            $isInstalled = $windows->install(
+                PHP_BINARY,
+                base_path('artisan'),
+                (string) config('security-monitor.host'),
+                (int) config('security-monitor.port')
+            );
+
+            return $isInstalled;
+        });
+
+        if (! $isInstalled) {
+            $this->components->error(
+                'No se pudieron crear los accesos directos; revisa que PowerShell esté disponible.'
+            );
+
+            return self::FAILURE;
+        }
+
+        $this->components->info('Listo. El monitor se levantará y abrirá en el navegador cada vez que inicies sesión.');
+        $this->components->bulletList([
+            'Panel: ' . $this->dashboardUrl(),
+            'Script lanzador: ' . $windows->launcherPath(),
+            ...array_map(fn (string $path): string => 'Acceso directo: ' . $path, $windows->shortcutPaths()),
+        ]);
+
+        return self::SUCCESS;
+    }
+
+    /**
+     * Elimina el arranque automático de Windows y detiene el servidor.
+     *
+     * @param WindowsAutostart $windows Instalador del arranque automático de Windows.
+     *
+     * @return int Código de salida.
+     */
+    private function uninstallWindows(WindowsAutostart $windows): int
+    {
+        $windows->uninstall((int) config('security-monitor.port'));
+
+        $this->components->info('Arranque automático eliminado.');
+
+        return self::SUCCESS;
+    }
+
+    /**
+     * Escribe en Linux la unidad systemd, la entrada de autoarranque y el lanzador, y habilita y
+     * reinicia el servicio.
      *
      * @return int Código de salida.
      */
@@ -72,7 +143,7 @@ class InstallAutostartCommand extends Command
     }
 
     /**
-     * Deshabilita y detiene el servicio y elimina los archivos instalados.
+     * Deshabilita y detiene en Linux el servicio y elimina los archivos instalados.
      *
      * @return int Código de salida.
      */

@@ -42,7 +42,10 @@ return [
     |
     */
 
-    'resources_refresh_seconds' => (int) env('SECURITY_MONITOR_RESOURCES_REFRESH_SECONDS', 2),
+    'resources_refresh_seconds' => (int) env(
+        'SECURITY_MONITOR_RESOURCES_REFRESH_SECONDS',
+        PHP_OS_FAMILY === 'Windows' ? 5 : 2
+    ),
 
     'resources_history_minutes' => (int) env('SECURITY_MONITOR_RESOURCES_HISTORY_MINUTES', 15),
 
@@ -50,27 +53,49 @@ return [
     |--------------------------------------------------------------------------
     | Chequeos habilitados (en orden de aparición)
     |--------------------------------------------------------------------------
+    |
+    | Cada chequeo declara en qué plataformas aplica (supports()); en cada equipo
+    | sólo se ejecutan los que corresponden a su sistema y distribución.
+    |
     */
 
     'checks' => [
+        // Linux: actualizaciones según la familia de la distribución.
         Checks\AptUpdatesCheck::class,
         Checks\AptIndexFreshnessCheck::class,
         Checks\UnattendedUpgradesCheck::class,
+        Checks\DnfUpdatesCheck::class,
+        Checks\DnfAutomaticCheck::class,
+        Checks\PacmanUpdatesCheck::class,
         Checks\RebootRequiredCheck::class,
         Checks\SnapUpdatesCheck::class,
         Checks\FirmwareUpdatesCheck::class,
+        // Linux: protección, sistema y red.
         Checks\FirewallCheck::class,
         Checks\AntivirusSignaturesCheck::class,
         Checks\AntivirusUpdaterCheck::class,
         Checks\AntivirusDaemonCheck::class,
-        Checks\AppArmorCheck::class,
+        Checks\MandatoryAccessControlCheck::class,
         Checks\SecureBootCheck::class,
         Checks\DiskEncryptionCheck::class,
         Checks\ScreenLockCheck::class,
         Checks\SshServerCheck::class,
         Checks\OpenPortsCheck::class,
+        // Windows.
+        Checks\WindowsUpdateCheck::class,
+        Checks\WindowsRebootCheck::class,
+        Checks\WindowsAntivirusCheck::class,
+        Checks\WindowsFirewallCheck::class,
+        Checks\WindowsDiskEncryptionCheck::class,
+        Checks\WindowsSecureBootCheck::class,
+        Checks\WindowsScreenLockCheck::class,
+        Checks\WindowsUacCheck::class,
+        Checks\WindowsRemoteDesktopCheck::class,
+        Checks\WindowsOpenPortsCheck::class,
+        // Linux y Windows.
         Checks\MemoryCheck::class,
         Checks\DiskSpaceCheck::class,
     ],
+
 
 ];

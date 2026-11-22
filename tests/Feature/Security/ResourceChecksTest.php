@@ -3,9 +3,11 @@
 namespace Tests\Feature\Security;
 
 use App\Enums\CheckStatus;
+use App\Enums\LinuxFamily;
 use App\Services\Security\Checks\DiskSpaceCheck;
 use App\Services\Security\Checks\MemoryCheck;
 use App\Services\Security\ResourceSampler;
+use App\Services\Security\Platform;
 use App\Services\Security\SystemInspector;
 use Illuminate\Support\Facades\Process;
 use Mockery\MockInterface;
@@ -25,6 +27,11 @@ class ResourceChecksTest extends TestCase
     private const string DF_COMMAND = "'df' '-B1' '--output=source,fstype,size,used,avail,target'";
 
     /**
+     * Plataforma con la que se construyen los chequeos (Debian/Ubuntu salvo que la prueba indique otra).
+     */
+    private Platform $platform;
+
+    /**
      * Impide que las pruebas ejecuten procesos reales del sistema.
      *
      * @return void
@@ -33,7 +40,9 @@ class ResourceChecksTest extends TestCase
     {
         parent::setUp();
 
+        Process::fake([]);
         Process::preventStrayProcesses();
+        $this->platform = Platform::linux(LinuxFamily::Debian, 'Ubuntu');
     }
 
     /**
@@ -61,7 +70,7 @@ class ResourceChecksTest extends TestCase
             $mock->shouldReceive('readFile')->with('/proc/meminfo')->andReturn($meminfo);
         });
 
-        return new ResourceSampler($inspector);
+        return new ResourceSampler($inspector, $this->platform);
     }
 
     /**
@@ -77,7 +86,7 @@ class ResourceChecksTest extends TestCase
             "Filesystem     Type        1B-blocks         Used        Avail Mounted on\n{$output}"
         )]);
 
-        return new ResourceSampler(new SystemInspector());
+        return new ResourceSampler(new SystemInspector(), $this->platform);
     }
 
     /**
@@ -123,7 +132,9 @@ class ResourceChecksTest extends TestCase
      */
     public function test_memory_status_depends_on_usage(): void
     {
-        $statusFor = fn (ResourceSampler $sampler): CheckStatus => (new MemoryCheck($sampler))->run()->status;
+        $statusFor = fn (ResourceSampler $sampler): CheckStatus => (
+            new MemoryCheck($sampler, $this->platform)
+        )->run()->status;
 
         $this->assertSame(CheckStatus::Ok, $statusFor($this->samplerWithMemory(16, 8)));
         $this->assertSame(CheckStatus::Warning, $statusFor($this->samplerWithMemory(16, 2)));
@@ -138,7 +149,7 @@ class ResourceChecksTest extends TestCase
      */
     public function test_high_memory_usage_includes_fix_steps(): void
     {
-        $result = (new MemoryCheck($this->samplerWithMemory(16, 0.5)))->run();
+        $result = (new MemoryCheck($this->samplerWithMemory(16, 0.5), $this->platform))->run();
 
         $this->assertSame('ps -eo pid,comm,%mem,rss --sort=-%mem | head -n 15', $result->fix[0]->command);
     }
@@ -153,7 +164,7 @@ class ResourceChecksTest extends TestCase
         $result = (new DiskSpaceCheck($this->samplerWithDisks(<<<'OUT'
             /dev/sda1      ext4     100000000000  90000000000  10000000000 /
             /dev/sdb1      ext4     100000000000  97000000000   3000000000 /datos
-            OUT)))->run();
+            OUT), $this->platform))->run();
 
         $this->assertSame(CheckStatus::Critical, $result->status);
         $this->assertSame('Poco espacio libre en /, /datos.', $result->message);
@@ -170,7 +181,7 @@ class ResourceChecksTest extends TestCase
         $result = (new DiskSpaceCheck($this->samplerWithDisks(<<<'OUT'
             /dev/sda2      ext4     500000000000 100000000000 400000000000 /
             /dev/sda1      vfat        536870912     10000000    526870912 /boot/efi
-            OUT)))->run();
+            OUT), $this->platform))->run();
 
         $this->assertSame(CheckStatus::Ok, $result->status);
         $this->assertSame([], $result->fix);
@@ -185,7 +196,7 @@ class ResourceChecksTest extends TestCase
     {
         $result = (new DiskSpaceCheck($this->samplerWithDisks(
             "/dev/sda1      ext4      12000000000  11000000000    900000000 /\n"
-        )))->run();
+        ), $this->platform))->run();
 
         $this->assertSame(CheckStatus::Critical, $result->status);
     }

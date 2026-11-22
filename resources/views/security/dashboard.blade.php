@@ -275,7 +275,7 @@
         <div>
             <h1>🛡️ {{ config('app.name') }}</h1>
             <div class="subtitle">
-                Equipo <strong>{{ gethostname() }}</strong> · <span id="updated">—</span>
+                Equipo <strong>{{ gethostname() }}</strong> · {{ $report['platform'] }} · <span id="updated">—</span>
             </div>
             <div class="error" id="error" hidden></div>
         </div>

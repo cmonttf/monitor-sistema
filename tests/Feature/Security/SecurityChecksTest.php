@@ -3,6 +3,7 @@
 namespace Tests\Feature\Security;
 
 use App\Enums\CheckStatus;
+use App\Enums\LinuxFamily;
 use App\Services\Security\Checks\AntivirusDaemonCheck;
 use App\Services\Security\Checks\AntivirusSignaturesCheck;
 use App\Services\Security\Checks\AntivirusUpdaterCheck;
@@ -14,6 +15,7 @@ use App\Services\Security\Checks\ScreenLockCheck;
 use App\Services\Security\Checks\SnapUpdatesCheck;
 use App\Services\Security\Checks\UnattendedUpgradesCheck;
 use App\Services\Security\FixStep;
+use App\Services\Security\Platform;
 use App\Services\Security\SystemInspector;
 use Illuminate\Support\Facades\Process;
 use Mockery\MockInterface;
@@ -29,6 +31,11 @@ use Tests\TestCase;
 class SecurityChecksTest extends TestCase
 {
     /**
+     * Plataforma con la que se construyen los chequeos (Debian/Ubuntu salvo que la prueba indique otra).
+     */
+    private Platform $platform;
+
+    /**
      * Impide que las pruebas ejecuten procesos reales del sistema.
      *
      * @return void
@@ -37,7 +44,9 @@ class SecurityChecksTest extends TestCase
     {
         parent::setUp();
 
+        Process::fake([]);
         Process::preventStrayProcesses();
+        $this->platform = Platform::linux(LinuxFamily::Debian, 'Ubuntu');
     }
 
     /**
@@ -100,7 +109,7 @@ class SecurityChecksTest extends TestCase
             tracker-extract/resolute-updates 3.11.0-1ubuntu1.1 amd64 [upgradable from: 3.8.2-4ubuntu2.1]
             OUT)]);
 
-        $result = (new AptUpdatesCheck($this->inspector(commands: ['apt'])))->run();
+        $result = (new AptUpdatesCheck($this->inspector(commands: ['apt']), $this->platform))->run();
 
         $this->assertSame(CheckStatus::Critical, $result->status);
         $this->assertSame('1 actualizaciones de seguridad pendientes (2 en total).', $result->message);
@@ -122,7 +131,7 @@ class SecurityChecksTest extends TestCase
             ->push(Process::result("Listing...\ntracker-extract/resolute-updates 3.11 amd64 [upgradable from: 3.8]\n"))
             ->push(Process::result("Listing...\n")),
         ]);
-        $check = new AptUpdatesCheck($this->inspector(commands: ['apt']));
+        $check = new AptUpdatesCheck($this->inspector(commands: ['apt']), $this->platform);
 
         $this->assertSame(CheckStatus::Warning, $check->run()->status);
         $this->assertSame(CheckStatus::Ok, $check->run()->status);
@@ -157,7 +166,7 @@ class SecurityChecksTest extends TestCase
         $date = date('D M j H:i:s Y', strtotime($signedAt));
         Process::fake([self::command('clamscan --version') => Process::result("ClamAV 1.5.4/28157/{$date}\n")]);
 
-        $result = (new AntivirusSignaturesCheck($this->inspector(commands: ['clamscan'])))->run();
+        $result = (new AntivirusSignaturesCheck($this->inspector(commands: ['clamscan']), $this->platform))->run();
 
         $this->assertSame($expected, $result->status);
     }
@@ -169,7 +178,7 @@ class SecurityChecksTest extends TestCase
      */
     public function test_missing_antivirus_is_a_warning(): void
     {
-        $result = (new AntivirusSignaturesCheck($this->inspector()))->run();
+        $result = (new AntivirusSignaturesCheck($this->inspector(), $this->platform))->run();
 
         $this->assertSame(CheckStatus::Warning, $result->status);
     }
@@ -183,7 +192,7 @@ class SecurityChecksTest extends TestCase
     {
         $inspector = $this->inspector(commands: ['freshclam'], services: ['clamav-freshclam' => 'failed']);
 
-        $result = (new AntivirusUpdaterCheck($inspector))->run();
+        $result = (new AntivirusUpdaterCheck($inspector, $this->platform))->run();
 
         $this->assertSame(CheckStatus::Critical, $result->status);
         $this->assertContains(
@@ -220,7 +229,7 @@ class SecurityChecksTest extends TestCase
     {
         $inspector = $this->inspector(commands: ['clamd'], services: ['clamav-daemon' => $state]);
 
-        $result = (new AntivirusDaemonCheck($inspector))->run();
+        $result = (new AntivirusDaemonCheck($inspector, $this->platform))->run();
 
         $this->assertSame($expected, $result->status);
     }
@@ -232,7 +241,7 @@ class SecurityChecksTest extends TestCase
      */
     public function test_missing_clamd_is_unknown(): void
     {
-        $result = (new AntivirusDaemonCheck($this->inspector()))->run();
+        $result = (new AntivirusDaemonCheck($this->inspector(), $this->platform))->run();
 
         $this->assertSame(CheckStatus::Unknown, $result->status);
     }
@@ -247,7 +256,9 @@ class SecurityChecksTest extends TestCase
         $enabled = ['/etc/ufw/ufw.conf' => "ENABLED=yes\n"];
 
         $disabled = ['/etc/ufw/ufw.conf' => "ENABLED=no\n"];
-        $statusFor = fn (SystemInspector $inspector): CheckStatus => (new FirewallCheck($inspector))->run()->status;
+        $statusFor = fn (SystemInspector $inspector): CheckStatus => (
+            new FirewallCheck($inspector, $this->platform)
+        )->run()->status;
 
         $this->assertSame(CheckStatus::Ok, $statusFor($this->inspector($enabled, ['ufw'], ['ufw' => 'active'])));
         $this->assertSame(CheckStatus::Critical, $statusFor($this->inspector($disabled, ['ufw'], ['ufw' => 'active'])));
@@ -255,7 +266,10 @@ class SecurityChecksTest extends TestCase
             CheckStatus::Critical,
             $statusFor($this->inspector($enabled, ['ufw'], ['ufw' => 'inactive']))
         );
-        $this->assertSame(CheckStatus::Critical, (new FirewallCheck($this->inspector()))->run()->status);
+        $this->assertSame(
+            CheckStatus::Critical,
+            (new FirewallCheck($this->inspector(), $this->platform))->run()->status
+        );
     }
 
     /**
@@ -270,7 +284,9 @@ class SecurityChecksTest extends TestCase
                 . "APT::Periodic::Unattended-Upgrade \"0\";\n",
         ];
 
-        $result = (new UnattendedUpgradesCheck($this->inspector($files, ['unattended-upgrade'])))->run();
+        $result = (
+            new UnattendedUpgradesCheck($this->inspector($files, ['unattended-upgrade']), $this->platform)
+        )->run();
 
         $this->assertSame(CheckStatus::Critical, $result->status);
     }
@@ -334,7 +350,7 @@ class SecurityChecksTest extends TestCase
     {
         $this->fakePorts(self::ufwStatus());
 
-        $result = (new OpenPortsCheck($this->inspector()))->run();
+        $result = (new OpenPortsCheck($this->inspector(), $this->platform))->run();
 
         $this->assertSame(CheckStatus::Ok, $result->status);
         $this->assertSame('2 servicios escuchan en la red, pero el cortafuegos los bloquea.', $result->message);
@@ -361,7 +377,7 @@ class SecurityChecksTest extends TestCase
         $inspector->shouldReceive('glob')->with('/etc/ufw/applications.d/*')->andReturn([$profile]);
         $inspector->shouldReceive('glob')->with('/etc/ufw/applications.d/*/*')->andReturn([]);
 
-        $result = (new OpenPortsCheck($inspector))->run();
+        $result = (new OpenPortsCheck($inspector, $this->platform))->run();
 
         $this->assertSame(CheckStatus::Warning, $result->status);
         $this->assertSame([
@@ -388,7 +404,7 @@ class SecurityChecksTest extends TestCase
             . '51000:52000/tcp            ALLOW IN    192.168.1.0/24'
         ));
 
-        $result = (new OpenPortsCheck($this->inspector()))->run();
+        $result = (new OpenPortsCheck($this->inspector(), $this->platform))->run();
 
         $this->assertSame([
             '⚠ 51330/tcp — permitido por la regla «51000:52000/tcp» desde 192.168.1.0/24',
@@ -408,7 +424,7 @@ class SecurityChecksTest extends TestCase
             . '51330                      ALLOW OUT   Anywhere'
         ));
 
-        $result = (new OpenPortsCheck($this->inspector()))->run();
+        $result = (new OpenPortsCheck($this->inspector(), $this->platform))->run();
 
         $this->assertSame(CheckStatus::Ok, $result->status);
     }
@@ -422,7 +438,7 @@ class SecurityChecksTest extends TestCase
     {
         $this->fakePorts(self::ufwStatus(default: 'allow'));
 
-        $result = (new OpenPortsCheck($this->inspector()))->run();
+        $result = (new OpenPortsCheck($this->inspector(), $this->platform))->run();
 
         $this->assertSame(CheckStatus::Warning, $result->status);
         $this->assertSame('2 puertos son accesibles desde la red a través del cortafuegos.', $result->message);
@@ -438,7 +454,7 @@ class SecurityChecksTest extends TestCase
     {
         $this->fakePorts('sudo: a password is required', ufwExitCode: 1);
 
-        $result = (new OpenPortsCheck($this->inspector()))->run();
+        $result = (new OpenPortsCheck($this->inspector(), $this->platform))->run();
 
         $this->assertSame(CheckStatus::Warning, $result->status);
         $this->assertSame(
@@ -458,7 +474,7 @@ class SecurityChecksTest extends TestCase
     {
         Process::fake([self::command('ss -tlnH') => Process::result("LISTEN 0 511 127.0.0.1:8787 0.0.0.0:*\n")]);
 
-        $result = (new OpenPortsCheck($this->inspector()))->run();
+        $result = (new OpenPortsCheck($this->inspector(), $this->platform))->run();
 
         $this->assertSame(CheckStatus::Ok, $result->status);
         $this->assertSame('Ningún servicio escucha fuera del equipo.', $result->message);
@@ -475,7 +491,7 @@ class SecurityChecksTest extends TestCase
             "Name     Version  Rev  Size  Publisher  Notes\nfirefox  140.0    1    90MB  mozilla    -\n"
         )]);
 
-        $result = (new SnapUpdatesCheck($this->inspector(commands: ['snap'])))->run();
+        $result = (new SnapUpdatesCheck($this->inspector(commands: ['snap']), $this->platform))->run();
 
         $this->assertContains('sudo snap refresh', self::commands($result->fix));
     }
@@ -493,7 +509,7 @@ class SecurityChecksTest extends TestCase
             ->with('/boot/vmlinuz-*')
             ->andReturn(['/boot/vmlinuz-7.0.0-9-generic', '/boot/vmlinuz-7.0.0-10-generic']);
 
-        $result = (new RebootRequiredCheck($inspector))->run();
+        $result = (new RebootRequiredCheck($inspector, $this->platform))->run();
 
         $this->assertSame(CheckStatus::Warning, $result->status);
         $this->assertContains('Kernel instalado más reciente: 7.0.0-10-generic', $result->details);
@@ -510,7 +526,7 @@ class SecurityChecksTest extends TestCase
             "Name     Version  Rev  Size  Publisher  Notes\nfirefox  140.0    1    90MB  mozilla    -\n"
         )]);
 
-        $result = (new SnapUpdatesCheck($this->inspector(commands: ['snap'])))->run();
+        $result = (new SnapUpdatesCheck($this->inspector(commands: ['snap']), $this->platform))->run();
 
         $this->assertSame(CheckStatus::Warning, $result->status);
         $this->assertSame(['firefox'], $result->details);
@@ -528,7 +544,7 @@ class SecurityChecksTest extends TestCase
             self::command('gsettings get org.gnome.desktop.session idle-delay') => Process::result("uint32 300\n"),
         ]);
 
-        $result = (new ScreenLockCheck($this->inspector(commands: ['gsettings'])))->run();
+        $result = (new ScreenLockCheck($this->inspector(commands: ['gsettings']), $this->platform))->run();
 
         $this->assertSame(CheckStatus::Critical, $result->status);
     }

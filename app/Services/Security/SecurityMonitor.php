@@ -18,7 +18,7 @@ use Throwable;
  *     fix: list<array{text: string, command: string|null}>
  * }
  * @phpstan-type Report array{
- *     generated_at: string, overall: array{status: string, label: string},
+ *     generated_at: string, platform: string, overall: array{status: string, label: string},
  *     summary: array<string, int>, checks: list<CheckRow>
  * }
  *
@@ -33,11 +33,12 @@ class SecurityMonitor
     private const string CACHE_KEY = 'security-monitor.report';
 
     /**
-     * Recibe el contenedor con el que se resuelven los chequeos configurados.
+     * Recibe el contenedor con el que se resuelven los chequeos y la plataforma detectada.
      *
      * @param Container $container Contenedor de servicios de Laravel.
+     * @param Platform  $platform  Plataforma en la que corre el monitor.
      */
-    public function __construct(private Container $container)
+    public function __construct(private Container $container, private Platform $platform)
     {
     }
 
@@ -62,7 +63,7 @@ class SecurityMonitor
     }
 
     /**
-     * Ejecuta todos los chequeos configurados y arma el reporte con el estado global (el peor)
+     * Ejecuta los chequeos configurados que aplican a la plataforma y arma el reporte con el estado global (el peor)
      * y el resumen por estado; un chequeo que falla no detiene a los demás.
      *
      * @return Report Reporte del panel.
@@ -71,6 +72,7 @@ class SecurityMonitor
     {
         $checks = collect(config('security-monitor.checks'))
             ->map(fn (string $class): SecurityCheck => $this->container->make($class))
+            ->filter(fn (SecurityCheck $check): bool => $check->supports($this->platform))
             ->map(fn (SecurityCheck $check): array => $this->checkRow($check));
 
         $overall = $checks
@@ -86,6 +88,7 @@ class SecurityMonitor
 
         return [
             'generated_at' => now()->toIso8601String(),
+            'platform' => $this->platform->name,
             'overall' => ['status' => $overall->value, 'label' => $overall->label()],
             'summary' => $summary,
             'checks' => $checks->values()->all(),

@@ -124,4 +124,52 @@ class SystemInspector
     {
         return php_uname('r');
     }
+
+    /**
+     * Familia del sistema operativo según PHP (Linux, Windows, Darwin...).
+     *
+     * @return string Valor de PHP_OS_FAMILY.
+     */
+    public function osFamily(): string
+    {
+        return PHP_OS_FAMILY;
+    }
+
+    /**
+     * Versión del sistema operativo, por ejemplo "build 22631 (Windows 11)" en Windows.
+     *
+     * @return string Versión informada por el sistema.
+     */
+    public function osVersion(): string
+    {
+        return php_uname('v');
+    }
+
+    /**
+     * Ejecuta un script de Windows PowerShell y devuelve su resultado como arreglo. El script debe terminar
+     * entregando un único objeto (por ejemplo un [pscustomobject]); se convierte a JSON en UTF-8.
+     *
+     * @param string $script  Script de PowerShell.
+     * @param int    $timeout Segundos máximos de ejecución.
+     *
+     * @return array<string, mixed>|null Objeto decodificado, o null si el script falló o no entregó JSON.
+     */
+    public function powershell(string $script, int $timeout = 30): ?array
+    {
+        $wrapped = "\$ProgressPreference = 'SilentlyContinue'; [Console]::OutputEncoding = [Text.Encoding]::UTF8; "
+            . "\$result = & {\n{$script}\n}; ConvertTo-Json -InputObject \$result -Depth 5 -Compress";
+
+        $result = $this->run(
+            ['powershell', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', $wrapped],
+            $timeout
+        );
+
+        if ($result->failed()) {
+            return null;
+        }
+
+        $decoded = json_decode(trim($result->output()), true);
+
+        return is_array($decoded) ? $decoded : null;
+    }
 }
