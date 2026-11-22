@@ -15,9 +15,11 @@ use Illuminate\View\View;
 class SecurityDashboardController extends Controller
 {
     /**
-     * @param  SecurityMonitor  $monitor  Servicio que ejecuta los chequeos.
+     * @param SecurityMonitor  $monitor  Servicio que ejecuta los chequeos.
      */
-    public function __construct(private SecurityMonitor $monitor) {}
+    public function __construct(private SecurityMonitor $monitor)
+    {
+    }
 
     /**
      * Muestra el panel.

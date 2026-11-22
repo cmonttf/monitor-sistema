@@ -33,13 +33,13 @@ class SecurityChecksTest extends TestCase
      */
     private static function command(string $command): string
     {
-        return "'".str_replace(' ', "' '", $command)."'";
+        return "'" . str_replace(' ', "' '", $command) . "'";
     }
 
     /**
      * Inspector real para comandos (interceptados con Process::fake) y simulado para archivos.
      *
-     * @param  array<string, string|null>  $files  Ruta => contenido (null = no existe).
+     * @param array<string, string|null>  $files  Ruta => contenido (null = no existe).
      */
     private function inspector(array $files = [], array $commands = [], array $services = []): SystemInspector
     {

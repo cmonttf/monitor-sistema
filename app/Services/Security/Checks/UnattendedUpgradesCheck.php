@@ -46,12 +46,12 @@ class UnattendedUpgradesCheck extends SystemCheck
         }
 
         $days = (int) $lastRun->diffInDays(now());
-        $details = ['Última ejecución: '.$lastRun->format('d-m-Y H:i')];
+        $details = ['Última ejecución: ' . $lastRun->format('d-m-Y H:i')];
 
         if ($days > 7) {
             return CheckResult::warning("Activadas, pero no se ejecutan hace {$days} días.", $details);
         }
 
-        return CheckResult::ok('Activadas; última ejecución '.$lastRun->diffForHumans().'.', $details);
+        return CheckResult::ok('Activadas; última ejecución ' . $lastRun->diffForHumans() . '.', $details);
     }
 }

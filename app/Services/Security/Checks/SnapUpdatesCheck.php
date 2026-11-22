@@ -42,6 +42,6 @@ class SnapUpdatesCheck extends SystemCheck
 
         $snaps = array_map(fn (string $line): string => Str::before($line, ' '), array_slice($lines, 1));
 
-        return CheckResult::warning(count($snaps).' aplicaciones Snap pendientes de actualizar.', $snaps);
+        return CheckResult::warning(count($snaps) . ' aplicaciones Snap pendientes de actualizar.', $snaps);
     }
 }

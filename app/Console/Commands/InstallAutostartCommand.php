@@ -52,10 +52,10 @@ class InstallAutostartCommand extends Command
 
         $this->components->info('Listo. El monitor se levantará y abrirá en el navegador cada vez que inicies sesión.');
         $this->components->bulletList([
-            'Panel: '.$this->dashboardUrl(),
-            'Servicio: '.$this->servicePath(),
-            'Autoarranque: '.$this->autostartPath(),
-            'Lanzador en el menú de aplicaciones: '.$this->launcherPath(),
+            'Panel: ' . $this->dashboardUrl(),
+            'Servicio: ' . $this->servicePath(),
+            'Autoarranque: ' . $this->autostartPath(),
+            'Lanzador en el menú de aplicaciones: ' . $this->launcherPath(),
         ]);
 
         return self::SUCCESS;
@@ -143,7 +143,7 @@ class InstallAutostartCommand extends Command
      */
     private function dashboardUrl(): string
     {
-        return 'http://'.config('security-monitor.host').':'.config('security-monitor.port');
+        return 'http://' . config('security-monitor.host') . ':' . config('security-monitor.port');
     }
 
     /**
@@ -151,7 +151,7 @@ class InstallAutostartCommand extends Command
      */
     private function servicePath(): string
     {
-        return $this->configHome().'/systemd/user/'.self::SERVICE_NAME;
+        return $this->configHome() . '/systemd/user/' . self::SERVICE_NAME;
     }
 
     /**
@@ -159,7 +159,7 @@ class InstallAutostartCommand extends Command
      */
     private function autostartPath(): string
     {
-        return $this->configHome().'/autostart/'.self::DESKTOP_NAME;
+        return $this->configHome() . '/autostart/' . self::DESKTOP_NAME;
     }
 
     /**
@@ -167,9 +167,9 @@ class InstallAutostartCommand extends Command
      */
     private function launcherPath(): string
     {
-        $dataHome = getenv('XDG_DATA_HOME') ?: $this->home().'/.local/share';
+        $dataHome = getenv('XDG_DATA_HOME') ?: $this->home() . '/.local/share';
 
-        return $dataHome.'/applications/'.self::DESKTOP_NAME;
+        return $dataHome . '/applications/' . self::DESKTOP_NAME;
     }
 
     /**
@@ -177,7 +177,7 @@ class InstallAutostartCommand extends Command
      */
     private function configHome(): string
     {
-        return getenv('XDG_CONFIG_HOME') ?: $this->home().'/.config';
+        return getenv('XDG_CONFIG_HOME') ?: $this->home() . '/.config';
     }
 
     /**

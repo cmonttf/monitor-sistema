@@ -45,7 +45,7 @@ class OpenPortsCheck extends SystemCheck
 
         if ($firewall === null) {
             return CheckResult::warning(
-                count($listeners).' puertos TCP escuchan en la red (no se pudieron leer las reglas de UFW).',
+                count($listeners) . ' puertos TCP escuchan en la red (no se pudieron leer las reglas de UFW).',
                 [...array_map(fn (int $port): string => "{$port}/tcp", array_keys($listeners)), ...$this->sudoersHint()],
             );
         }
@@ -65,10 +65,10 @@ class OpenPortsCheck extends SystemCheck
         }
 
         if ($open !== []) {
-            return CheckResult::warning(count($open).' puertos son accesibles desde la red a través del cortafuegos.', [...$open, ...$blocked]);
+            return CheckResult::warning(count($open) . ' puertos son accesibles desde la red a través del cortafuegos.', [...$open, ...$blocked]);
         }
 
-        return CheckResult::ok(count($blocked).' servicios escuchan en la red, pero el cortafuegos los bloquea.', $blocked);
+        return CheckResult::ok(count($blocked) . ' servicios escuchan en la red, pero el cortafuegos los bloquea.', $blocked);
     }
 
     /**
@@ -152,7 +152,7 @@ class OpenPortsCheck extends SystemCheck
 
         return [
             'Para cruzar con UFW, permite al monitor leer el estado del cortafuegos (una sola vez):',
-            "echo '{$user} ALL=(root) NOPASSWD: {$command}' | sudo tee ".self::SUDOERS_FILE.' && sudo chmod 440 '.self::SUDOERS_FILE,
+            "echo '{$user} ALL=(root) NOPASSWD: {$command}' | sudo tee " . self::SUDOERS_FILE . ' && sudo chmod 440 ' . self::SUDOERS_FILE,
         ];
     }
 }

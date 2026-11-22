@@ -29,7 +29,9 @@ class FirmwareUpdatesCheck extends SystemCheck
 
         $result = $this->system->run(['fwupdmgr', 'get-updates', '--json'], 30);
 
-        /** @var array{Devices?: list<array{Name?: string, Releases?: list<array{Version?: string}>}>}|null $data */
+        /**
+ * @var array{Devices?: list<array{Name?: string, Releases?: list<array{Version?: string}>}>}|null $data
+*/
         $data = json_decode($result->output(), true);
 
         if (! is_array($data)) {
@@ -38,12 +40,12 @@ class FirmwareUpdatesCheck extends SystemCheck
 
         $details = collect($data['Devices'] ?? [])
             ->filter(fn (array $device): bool => ! empty($device['Releases']))
-            ->map(fn (array $device): string => ($device['Name'] ?? 'Dispositivo').' → '.($device['Releases'][0]['Version'] ?? '?'))
+            ->map(fn (array $device): string => ($device['Name'] ?? 'Dispositivo') . ' → ' . ($device['Releases'][0]['Version'] ?? '?'))
             ->values()
             ->all();
 
         if ($details !== []) {
-            return CheckResult::warning(count($details).' actualizaciones de firmware disponibles.', [...$details, 'Aplicar con: fwupdmgr update']);
+            return CheckResult::warning(count($details) . ' actualizaciones de firmware disponibles.', [...$details, 'Aplicar con: fwupdmgr update']);
         }
 
         return CheckResult::ok('El firmware está al día.');

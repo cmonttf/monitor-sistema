@@ -16,17 +16,18 @@ final readonly class UfwStatus
     private const string PORT_PATTERN = '/^([\d,:]+)(?:\/(tcp|udp))?$/';
 
     /**
-     * @param  bool  $isActive  Si el cortafuegos está activo.
-     * @param  string  $defaultIncoming  Política por defecto de entrada (deny, reject, allow).
-     * @param  list<Rule>  $rules  Reglas en el orden en que UFW las evalúa.
-     * @param  array<string, string>  $appPorts  Perfil de aplicación => especificación de puertos.
+     * @param bool  $isActive  Si el cortafuegos está activo.
+     * @param string  $defaultIncoming  Política por defecto de entrada (deny, reject, allow).
+     * @param list<Rule>  $rules  Reglas en el orden en que UFW las evalúa.
+     * @param array<string, string>  $appPorts  Perfil de aplicación => especificación de puertos.
      */
     public function __construct(
         public bool $isActive,
         public string $defaultIncoming,
         public array $rules,
         public array $appPorts = [],
-    ) {}
+    ) {
+    }
 
     /**
      * Construye el estado a partir de la salida del comando; null si no es reconocible.
@@ -97,7 +98,7 @@ final readonly class UfwStatus
 
         return [
             'allowed' => $isAllowed,
-            'reason' => ($isAllowed ? 'permitido' : 'bloqueado')." por la política por defecto ({$this->defaultIncoming})",
+            'reason' => ($isAllowed ? 'permitido' : 'bloqueado') . " por la política por defecto ({$this->defaultIncoming})",
         ];
     }
 

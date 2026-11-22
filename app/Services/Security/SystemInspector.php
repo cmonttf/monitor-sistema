@@ -36,7 +36,7 @@ class SystemInspector
      */
     public function hasCommand(string $binary): bool
     {
-        return (new ExecutableFinder)->find($binary, null, ['/usr/sbin', '/sbin']) !== null;
+        return (new ExecutableFinder())->find($binary, null, ['/usr/sbin', '/sbin']) !== null;
     }
 
     /**

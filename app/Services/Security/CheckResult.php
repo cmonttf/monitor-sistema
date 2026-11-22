@@ -19,9 +19,9 @@ final readonly class CheckResult
     public array $details;
 
     /**
-     * @param  CheckStatus  $status  Estado del chequeo.
-     * @param  string  $message  Resumen en una línea.
-     * @param  array<array-key, string>  $details  Información adicional; se reindexa como lista.
+     * @param CheckStatus  $status  Estado del chequeo.
+     * @param string  $message  Resumen en una línea.
+     * @param array<array-key, string>  $details  Información adicional; se reindexa como lista.
      */
     public function __construct(
         public CheckStatus $status,

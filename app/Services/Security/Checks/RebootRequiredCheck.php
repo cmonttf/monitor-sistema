@@ -36,7 +36,7 @@ class RebootRequiredCheck extends SystemCheck
         }
 
         if ($this->system->fileExists(self::FLAG)) {
-            $packages = array_values(array_filter(explode("\n", $this->system->readFile(self::FLAG.'.pkgs') ?? '')));
+            $packages = array_values(array_filter(explode("\n", $this->system->readFile(self::FLAG . '.pkgs') ?? '')));
 
             return CheckResult::warning('El sistema requiere reiniciarse para completar actualizaciones.', [...$details, ...$packages]);
         }

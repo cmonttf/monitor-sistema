@@ -26,10 +26,10 @@ class OpenDashboardCommand extends Command
      */
     public function handle(): int
     {
-        $baseUrl = 'http://'.config('security-monitor.host').':'.config('security-monitor.port');
+        $baseUrl = 'http://' . config('security-monitor.host') . ':' . config('security-monitor.port');
 
         if (! $this->waitForServer($baseUrl, (int) $this->option('wait'))) {
-            $this->components->error("El monitor no responde en {$baseUrl}. Revisa: systemctl --user status ".InstallAutostartCommand::SERVICE_NAME);
+            $this->components->error("El monitor no responde en {$baseUrl}. Revisa: systemctl --user status " . InstallAutostartCommand::SERVICE_NAME);
 
             return self::FAILURE;
         }
@@ -46,7 +46,7 @@ class OpenDashboardCommand extends Command
     {
         for ($attempt = 0; $attempt <= $seconds; $attempt++) {
             try {
-                if (Http::timeout(2)->get($baseUrl.'/up')->successful()) {
+                if (Http::timeout(2)->get($baseUrl . '/up')->successful()) {
                     return true;
                 }
             } catch (ConnectionException) {

@@ -42,14 +42,14 @@ class AptUpdatesCheck extends SystemCheck
         $security = $packages->filter(fn (string $line): bool => str_contains($line, '-security'));
 
         $details = $packages
-            ->map(fn (string $line): string => (str_contains($line, '-security') ? '🔒 ' : '').Str::before($line, '/'))
+            ->map(fn (string $line): string => (str_contains($line, '-security') ? '🔒 ' : '') . Str::before($line, '/'))
             ->sortByDesc(fn (string $name): bool => str_starts_with($name, '🔒'))
             ->take(self::MAX_LISTED)
             ->values()
             ->all();
 
         if ($packages->count() > self::MAX_LISTED) {
-            $details[] = '… y '.($packages->count() - self::MAX_LISTED).' más';
+            $details[] = '… y ' . ($packages->count() - self::MAX_LISTED) . ' más';
         }
 
         if ($security->isNotEmpty()) {

@@ -50,13 +50,13 @@ class AntivirusSignaturesCheck extends SystemCheck
         $details = [
             "Motor: {$parts[0]}",
             "Base de firmas: {$parts[1]}",
-            'Fecha de firmas: '.$signedAt->format('d-m-Y H:i'),
+            'Fecha de firmas: ' . $signedAt->format('d-m-Y H:i'),
         ];
 
         return match (true) {
             $days > self::CRITICAL_DAYS => CheckResult::critical("Las firmas tienen {$days} días de antigüedad.", $details),
             $days > self::WARNING_DAYS => CheckResult::warning("Las firmas tienen {$days} días de antigüedad.", $details),
-            default => CheckResult::ok('Firmas actualizadas '.$signedAt->diffForHumans().'.', $details),
+            default => CheckResult::ok('Firmas actualizadas ' . $signedAt->diffForHumans() . '.', $details),
         };
     }
 }

@@ -34,12 +34,12 @@ class AptIndexFreshnessCheck extends SystemCheck
         }
 
         $days = (int) $updatedAt->diffInDays(now());
-        $details = ['Última actualización: '.$updatedAt->format('d-m-Y H:i')];
+        $details = ['Última actualización: ' . $updatedAt->format('d-m-Y H:i')];
 
         return match (true) {
             $days > 14 => CheckResult::critical("La lista de paquetes no se actualiza hace {$days} días.", $details),
             $days > 3 => CheckResult::warning("La lista de paquetes no se actualiza hace {$days} días.", $details),
-            default => CheckResult::ok('Lista de paquetes actualizada '.$updatedAt->diffForHumans().'.', $details),
+            default => CheckResult::ok('Lista de paquetes actualizada ' . $updatedAt->diffForHumans() . '.', $details),
         };
     }
 }

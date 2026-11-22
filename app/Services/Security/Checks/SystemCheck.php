@@ -12,7 +12,9 @@ use App\Services\Security\SystemInspector;
 abstract class SystemCheck implements SecurityCheck
 {
     /**
-     * @param  SystemInspector  $system  Acceso a comandos y archivos del sistema.
+     * @param SystemInspector  $system  Acceso a comandos y archivos del sistema.
      */
-    public function __construct(protected SystemInspector $system) {}
+    public function __construct(protected SystemInspector $system)
+    {
+    }
 }

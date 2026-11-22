@@ -84,7 +84,9 @@ class SecurityDashboardTest extends TestCase
  */
 class FakeCheck implements SecurityCheck
 {
-    /** @var list<CheckResult|\Throwable> */
+    /**
+ * @var list<CheckResult|\Throwable>
+*/
     public static array $results = [];
 
     public function name(): string

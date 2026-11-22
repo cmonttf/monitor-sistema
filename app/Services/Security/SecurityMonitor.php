@@ -22,9 +22,11 @@ class SecurityMonitor
     private const string CACHE_KEY = 'security-monitor.report';
 
     /**
-     * @param  Container  $container  Contenedor usado para resolver los chequeos.
+     * @param Container  $container  Contenedor usado para resolver los chequeos.
      */
-    public function __construct(private Container $container) {}
+    public function __construct(private Container $container)
+    {
+    }
 
     /**
      * Reporte en caché (o recién generado si expiró o se fuerza).
