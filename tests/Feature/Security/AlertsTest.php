@@ -141,6 +141,27 @@ class AlertsTest extends TestCase
     }
 
     /**
+     * Si el correo falla, se reintenta en la revisión siguiente sin repetir la notificación de escritorio.
+     *
+     * @return void
+     */
+    public function test_failed_mail_is_retried_without_repeating_the_desktop_notification(): void
+    {
+        $failing = CheckResult::critical('Problema.');
+        FakeCheck::$results = [$failing, $failing];
+        Mail::shouldReceive('to')->twice()->andReturnSelf();
+        Mail::shouldReceive('send')->once()->andThrow(
+            new \RuntimeException('534 Application-specific password required')
+        );
+        Mail::shouldReceive('send')->once();
+
+        $this->artisan('monitor:alert')->assertFailed();
+        $this->artisan('monitor:alert')->assertSuccessful();
+
+        $this->assertCount(1, $this->desktopNotifications);
+    }
+
+    /**
      * Sin destinatario configurado no se envía correo, pero sí la notificación de escritorio.
      *
      * @return void

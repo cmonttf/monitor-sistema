@@ -6,8 +6,9 @@ use App\Enums\CheckStatus;
 use Illuminate\Support\Facades\Storage;
 
 /**
- * Último estado notificado de cada chequeo, para alertar sólo cuando algo cambia y no repetir el mismo
- * aviso en cada revisión programada. Se guarda en el almacenamiento local de la aplicación.
+ * Último estado notificado de cada chequeo, por canal (correo y escritorio), para alertar sólo cuando algo
+ * cambia y no repetir el mismo aviso en cada revisión programada. Cada canal guarda su propio estado: si el
+ * correo falla se reintenta sin repetir la notificación de escritorio. Se guarda en el almacenamiento local.
  *
  * @phpstan-import-type CheckRow from SecurityMonitor
  * @phpstan-type        Changes array{worsened: list<CheckRow>, resolved: list<CheckRow>}
@@ -18,9 +19,22 @@ use Illuminate\Support\Facades\Storage;
 class AlertState
 {
     /**
-     * Ruta del archivo de estado dentro del disco local.
+     * Canal de alertas por correo.
      */
-    private const string PATH = 'security-monitor/alert-state.json';
+    public const string MAIL = 'mail';
+
+    /**
+     * Canal de alertas por notificación de escritorio.
+     */
+    public const string DESKTOP = 'desktop';
+
+    /**
+     * Ruta del archivo de estado de cada canal dentro del disco local.
+     */
+    private const array PATHS = [
+        self::MAIL => 'security-monitor/alert-state.json',
+        self::DESKTOP => 'security-monitor/alert-state-desktop.json',
+    ];
 
     /**
      * Severidad mínima que se notifica (advertencia).
@@ -28,31 +42,37 @@ class AlertState
     private const int ALERT_SEVERITY = 2;
 
     /**
-     * Carga el último estado notificado.
+     * Carga el último estado notificado por un canal. Si el escritorio aún no tiene estado propio, usa el
+     * del correo, para no repetir avisos ya enviados.
+     *
+     * @param string $channel Canal: correo o escritorio.
      *
      * @return array<string, string> Clave del chequeo => estado.
      */
-    public function load(): array
+    public function load(string $channel = self::MAIL): array
     {
-        if (! Storage::disk('local')->exists(self::PATH)) {
-            return [];
+        $path = self::PATHS[$channel];
+
+        if (! Storage::disk('local')->exists($path)) {
+            return $channel === self::MAIL ? [] : $this->load(self::MAIL);
         }
 
-        $data = json_decode((string) Storage::disk('local')->get(self::PATH), true);
+        $data = json_decode((string) Storage::disk('local')->get($path), true);
 
         return is_array($data['checks'] ?? null) ? $data['checks'] : [];
     }
 
     /**
-     * Guarda el estado actual de los chequeos como último estado notificado.
+     * Guarda el estado actual de los chequeos como último estado notificado por un canal.
      *
-     * @param list<CheckRow> $checks Filas del reporte.
+     * @param list<CheckRow> $checks  Filas del reporte.
+     * @param string         $channel Canal: correo o escritorio.
      *
      * @return void
      */
-    public function save(array $checks): void
+    public function save(array $checks, string $channel = self::MAIL): void
     {
-        Storage::disk('local')->put(self::PATH, (string) json_encode([
+        Storage::disk('local')->put(self::PATHS[$channel], (string) json_encode([
             'updated_at' => now()->toIso8601String(),
             'checks' => array_column($checks, 'status', 'key'),
         ], JSON_PRETTY_PRINT));

@@ -14,8 +14,9 @@ use Illuminate\Support\Facades\Mail;
 use Throwable;
 
 /**
- * Revisión programada: ejecuta los chequeos y, si alguno empeoró desde la última revisión, avisa por correo
- * y con una notificación de escritorio. Con --test envía un aviso de prueba para verificar la configuración.
+ * Revisión programada: ejecuta los chequeos y, si alguno empeoró desde el último aviso, avisa por correo
+ * y con una notificación de escritorio. Si el correo falla, se reintenta en la próxima revisión sin repetir
+ * la notificación de escritorio. Con --test envía un aviso de prueba para verificar la configuración.
  *
  * @phpstan-import-type CheckRow from SecurityMonitor
  *
@@ -53,29 +54,35 @@ class AlertCommand extends Command
         }
 
         $report = $monitor->report(fresh: true);
-        $changes = AlertState::changes($report['checks'], $state->load());
+        $desktopChanges = AlertState::changes($report['checks'], $state->load(AlertState::DESKTOP));
+        $mailChanges = AlertState::changes($report['checks'], $state->load(AlertState::MAIL));
 
-        if ($changes['worsened'] === [] && $changes['resolved'] === []) {
-            $state->save($report['checks']);
-            $this->components->info('Sin cambios que avisar.');
-
-            return self::SUCCESS;
+        if ($desktopChanges['worsened'] !== [] || $desktopChanges['resolved'] !== []) {
+            $this->notifyDesktop($notifier, $desktopChanges['worsened'], $desktopChanges['resolved']);
         }
 
-        $this->notifyDesktop($notifier, $changes['worsened'], $changes['resolved']);
-        $mailed = $this->sendMail(new SecurityAlertMail(
-            $changes['worsened'],
-            $changes['resolved'],
-            (string) gethostname(),
-            $platform->name
-        ));
+        $state->save($report['checks'], AlertState::DESKTOP);
+        $mailed = true;
+
+        if ($mailChanges['worsened'] !== [] || $mailChanges['resolved'] !== []) {
+            $mailed = $this->sendMail(new SecurityAlertMail(
+                $mailChanges['worsened'],
+                $mailChanges['resolved'],
+                (string) gethostname(),
+                $platform->name
+            ));
+        }
 
         if ($mailed) {
-            $state->save($report['checks']);
+            $state->save($report['checks'], AlertState::MAIL);
         }
 
         $this->components->info(
-            count($changes['worsened']) . ' empeoraron y ' . count($changes['resolved']) . ' se resolvieron.'
+            $mailChanges['worsened'] === [] && $mailChanges['resolved'] === [] && $desktopChanges['worsened'] === []
+                ? 'Sin cambios que avisar.'
+                : count(
+                    $mailChanges['worsened']
+                ) . ' empeoraron y ' . count($mailChanges['resolved']) . ' se resolvieron.'
         );
 
         return $mailed ? self::SUCCESS : self::FAILURE;
