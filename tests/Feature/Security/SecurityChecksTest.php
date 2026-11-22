@@ -163,20 +163,117 @@ class SecurityChecksTest extends TestCase
         $this->assertSame(CheckStatus::Critical, $result->status);
     }
 
-    public function test_open_ports_ignores_loopback_addresses(): void
+    private const string LISTENERS = <<<'OUT'
+        LISTEN 0 4096 127.0.0.53%lo:53 0.0.0.0:*
+        LISTEN 0 511 127.0.0.1:8787 0.0.0.0:*
+        LISTEN 0 128 [::1]:631 [::]:*
+        LISTEN 0 511 *:80 *:*
+        LISTEN 0 4096 *:51330 *:*
+        OUT;
+
+    private function fakePorts(string $ufwOutput, int $ufwExitCode = 0): void
     {
-        Process::fake([self::command('ss -tlnH') => Process::result(<<<'OUT'
-            LISTEN 0 4096 127.0.0.53%lo:53 0.0.0.0:*
-            LISTEN 0 511 127.0.0.1:8787 0.0.0.0:*
-            LISTEN 0 128 [::1]:631 [::]:*
-            LISTEN 0 511 *:80 *:*
-            LISTEN 0 128 0.0.0.0:22 0.0.0.0:*
-            OUT)]);
+        Process::fake([
+            self::command('ss -tlnH') => Process::result(self::LISTENERS),
+            self::command('sudo -n /usr/sbin/ufw status verbose') => Process::result($ufwOutput, exitCode: $ufwExitCode),
+        ]);
+    }
+
+    private static function ufwStatus(string $rules = '', string $default = 'deny'): string
+    {
+        return <<<OUT
+            Status: active
+            Logging: on (low)
+            Default: {$default} (incoming), allow (outgoing), disabled (routed)
+            New profiles: skip
+
+            To                         Action      From
+            --                         ------      ----
+            {$rules}
+            OUT;
+    }
+
+    public function test_ports_blocked_by_the_default_policy_are_ok(): void
+    {
+        $this->fakePorts(self::ufwStatus());
+
+        $result = (new OpenPortsCheck($this->inspector()))->run();
+
+        $this->assertSame(CheckStatus::Ok, $result->status);
+        $this->assertSame('2 servicios escuchan en la red, pero el cortafuegos los bloquea.', $result->message);
+        $this->assertSame([
+            '✓ 80/tcp — bloqueado por la política por defecto (deny)',
+            '✓ 51330/tcp — bloqueado por la política por defecto (deny)',
+        ], $result->details);
+    }
+
+    public function test_port_allowed_through_an_app_profile_is_a_warning(): void
+    {
+        $this->fakePorts(self::ufwStatus("Apache Full                ALLOW IN    Anywhere\nApache Full (v6)           ALLOW IN    Anywhere (v6)"));
+        $inspector = $this->inspector(['/etc/ufw/applications.d/apache2-utils.ufw.profile' => "[Apache Full]\ntitle=Web\nports=80,443/tcp\n"]);
+        $inspector->shouldReceive('glob')->with('/etc/ufw/applications.d/*')->andReturn(['/etc/ufw/applications.d/apache2-utils.ufw.profile']);
+        $inspector->shouldReceive('glob')->with('/etc/ufw/applications.d/*/*')->andReturn([]);
+
+        $result = (new OpenPortsCheck($inspector))->run();
+
+        $this->assertSame(CheckStatus::Warning, $result->status);
+        $this->assertSame([
+            '⚠ 80/tcp — permitido por la regla «Apache Full» desde Anywhere',
+            '✓ 51330/tcp — bloqueado por la política por defecto (deny)',
+        ], $result->details);
+    }
+
+    public function test_first_matching_rule_wins(): void
+    {
+        $this->fakePorts(self::ufwStatus("80/tcp                     DENY IN     Anywhere\n80,443/tcp                 ALLOW IN    Anywhere\n51000:52000/tcp            ALLOW IN    192.168.1.0/24"));
+
+        $result = (new OpenPortsCheck($this->inspector()))->run();
+
+        $this->assertSame([
+            '⚠ 51330/tcp — permitido por la regla «51000:52000/tcp» desde 192.168.1.0/24',
+            '✓ 80/tcp — bloqueado por la regla «80/tcp» desde Anywhere',
+        ], $result->details);
+    }
+
+    public function test_rules_for_other_protocols_or_outgoing_traffic_do_not_open_ports(): void
+    {
+        $this->fakePorts(self::ufwStatus("80/udp                     ALLOW IN    Anywhere\n51330                      ALLOW OUT   Anywhere"));
+
+        $result = (new OpenPortsCheck($this->inspector()))->run();
+
+        $this->assertSame(CheckStatus::Ok, $result->status);
+    }
+
+    public function test_ports_are_open_when_the_default_policy_allows(): void
+    {
+        $this->fakePorts(self::ufwStatus(default: 'allow'));
 
         $result = (new OpenPortsCheck($this->inspector()))->run();
 
         $this->assertSame(CheckStatus::Warning, $result->status);
-        $this->assertSame(['*:80', '0.0.0.0:22'], $result->details);
+        $this->assertSame('2 puertos son accesibles desde la red a través del cortafuegos.', $result->message);
+    }
+
+    public function test_without_permission_to_read_ufw_it_lists_ports_and_explains_how_to_enable_it(): void
+    {
+        $this->fakePorts('sudo: a password is required', ufwExitCode: 1);
+
+        $result = (new OpenPortsCheck($this->inspector()))->run();
+
+        $this->assertSame(CheckStatus::Warning, $result->status);
+        $this->assertSame('2 puertos TCP escuchan en la red (no se pudieron leer las reglas de UFW).', $result->message);
+        $this->assertSame(['80/tcp', '51330/tcp'], array_slice($result->details, 0, 2));
+        $this->assertStringContainsString('NOPASSWD: /usr/sbin/ufw status verbose', $result->details[3]);
+    }
+
+    public function test_no_exposed_listeners_is_ok(): void
+    {
+        Process::fake([self::command('ss -tlnH') => Process::result("LISTEN 0 511 127.0.0.1:8787 0.0.0.0:*\n")]);
+
+        $result = (new OpenPortsCheck($this->inspector()))->run();
+
+        $this->assertSame(CheckStatus::Ok, $result->status);
+        $this->assertSame('Ningún servicio escucha fuera del equipo.', $result->message);
     }
 
     public function test_newer_installed_kernel_requires_reboot(): void
