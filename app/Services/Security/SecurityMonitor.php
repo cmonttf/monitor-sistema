@@ -71,7 +71,7 @@ class SecurityMonitor
     {
         $checks = collect(config('security-monitor.checks'))
             ->map(fn (string $class): SecurityCheck => $this->container->make($class))
-            ->map(fn (SecurityCheck $check): array => $this->runCheck($check));
+            ->map(fn (SecurityCheck $check): array => $this->checkRow($check));
 
         $overall = $checks
             ->map(fn (array $row): CheckStatus => CheckStatus::from($row['status']))
@@ -100,7 +100,7 @@ class SecurityMonitor
      *
      * @return CheckRow Fila del reporte.
      */
-    private function runCheck(SecurityCheck $check): array
+    public function checkRow(SecurityCheck $check): array
     {
         try {
             $result = $check->run();

@@ -33,6 +33,21 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Monitor de recursos en tiempo real
+    |--------------------------------------------------------------------------
+    |
+    | "resources_refresh_seconds" es cada cuánto el navegador toma una muestra
+    | de memoria y discos; "resources_history_minutes" es cuánto historial de
+    | RAM conserva el gráfico.
+    |
+    */
+
+    'resources_refresh_seconds' => (int) env('SECURITY_MONITOR_RESOURCES_REFRESH_SECONDS', 2),
+
+    'resources_history_minutes' => (int) env('SECURITY_MONITOR_RESOURCES_HISTORY_MINUTES', 15),
+
+    /*
+    |--------------------------------------------------------------------------
     | Chequeos habilitados (en orden de aparición)
     |--------------------------------------------------------------------------
     */
@@ -54,6 +69,8 @@ return [
         Checks\ScreenLockCheck::class,
         Checks\SshServerCheck::class,
         Checks\OpenPortsCheck::class,
+        Checks\MemoryCheck::class,
+        Checks\DiskSpaceCheck::class,
     ],
 
 ];

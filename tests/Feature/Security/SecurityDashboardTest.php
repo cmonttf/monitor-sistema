@@ -16,7 +16,8 @@ use Tests\TestCase;
 class SecurityDashboardTest extends TestCase
 {
     /**
-     * Reinicia la cola del chequeo simulado y lo deja como único chequeo configurado.
+     * Desactiva Vite (las pruebas no requieren assets compilados), reinicia la cola del chequeo
+     * simulado y lo deja como único chequeo configurado.
      *
      * @return void
      */
@@ -24,6 +25,7 @@ class SecurityDashboardTest extends TestCase
     {
         parent::setUp();
 
+        $this->withoutVite();
         FakeCheck::$results = [];
         config(['security-monitor.checks' => [FakeCheck::class]]);
     }

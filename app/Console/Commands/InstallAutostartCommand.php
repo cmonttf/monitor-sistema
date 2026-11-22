@@ -90,7 +90,8 @@ class InstallAutostartCommand extends Command
     }
 
     /**
-     * Genera la unidad systemd que ejecuta `artisan serve` en la dirección configurada.
+     * Genera la unidad systemd que ejecuta `artisan serve` en la dirección configurada, con 4 workers
+     * para que el monitor en tiempo real no espere a que termine una verificación completa.
      *
      * @return string Contenido de la unidad.
      */
@@ -110,6 +111,7 @@ class InstallAutostartCommand extends Command
             [Service]
             Type=simple
             WorkingDirectory={$workingDirectory}
+            Environment=PHP_CLI_SERVER_WORKERS=4
             ExecStart="{$php}" "{$artisan}" serve --host={$host} --port={$port} --no-reload
             Restart=on-failure
             RestartSec=5

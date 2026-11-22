@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{{ config('app.name') }}</title>
     <link rel="icon" id="favicon" href="data:,">
+    @vite('resources/js/resources-monitor.js')
     <style>
         :root {
             --bg: #f3f5f8;
@@ -20,6 +21,8 @@
             --critical-soft: #fde6e6;
             --unknown: #6b7280;
             --unknown-soft: #eceef1;
+            --series: #2a78d6;
+            --series-track: #cde2fb;
         }
 
         @media (prefers-color-scheme: dark) {
@@ -37,6 +40,8 @@
                 --critical-soft: #3d1717;
                 --unknown: #9aa3af;
                 --unknown-soft: #262d38;
+                --series: #3987e5;
+                --series-track: #1c3557;
             }
         }
 
@@ -199,6 +204,69 @@
         @media (prefers-reduced-motion: reduce) { .status-critical.banner .icon { animation: none; } }
 
         .error { color: var(--critical); font-size: .9rem; margin-top: 4px; }
+
+        /* Recursos en vivo */
+        .resources { margin-bottom: 8px; }
+        .resource-body { margin: 10px 0 0 44px; }
+        .resource-figure { font-size: .95rem; color: var(--muted); margin-bottom: 8px; }
+        .resource-figure strong { font-size: 1.35rem; color: var(--text); font-weight: 600; margin-right: 4px; }
+        .resource-facts {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+            gap: 6px 16px;
+            margin: 10px 0 0;
+            font-size: .85rem;
+        }
+        .resource-facts dt { color: var(--muted); }
+        .resource-facts dd { margin: 0; font-weight: 600; }
+        .disk-row + .disk-row { margin-top: 12px; }
+        .disk-head { display: flex; justify-content: space-between; gap: 8px; font-size: .88rem; margin-bottom: 4px; }
+        .disk-name { font-weight: 600; font-family: ui-monospace, "Ubuntu Mono", monospace; }
+        .disk-value { color: var(--muted); text-align: right; }
+
+        .meter { height: 8px; border-radius: 999px; background: var(--series-track); overflow: hidden; }
+        .meter span { display: block; height: 100%; border-radius: inherit; background: var(--series); }
+        .meter[data-level="warning"] { background: var(--warning-soft); }
+        .meter[data-level="warning"] span { background: var(--warning); }
+        .meter[data-level="critical"] { background: var(--critical-soft); }
+        .meter[data-level="critical"] span { background: var(--critical); }
+
+        .chart-card { grid-column: 1 / -1; border-left-width: 1px; }
+        .chart-head { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-start; justify-content: space-between; }
+        .chart-subtitle { color: var(--muted); font-size: .85rem; }
+        .range { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+        .range button { border: 0; border-radius: 0; padding: 4px 12px; font-size: .85rem; }
+        .range button + button { border-left: 1px solid var(--border); }
+        .range button[aria-pressed="true"] { background: var(--series); color: #fff; }
+        .chart { position: relative; margin-top: 12px; min-height: 220px; outline-offset: 4px; }
+        .chart svg { display: block; overflow: visible; }
+        .chart text { font-size: 12px; fill: var(--muted); }
+        .chart .grid { stroke: var(--border); stroke-width: 1; }
+        .chart .area { fill: var(--series); opacity: .1; }
+        .chart .line { fill: none; stroke: var(--series); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+        .chart .end-dot, .chart .cross-dot { fill: var(--series); stroke: var(--surface); stroke-width: 2; }
+        .chart .end-label { fill: var(--text); font-weight: 600; }
+        .chart .cross { stroke: var(--muted); stroke-width: 1; }
+        .chart-empty { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; color: var(--muted); }
+        .chart-tooltip {
+            position: absolute;
+            top: 8px;
+            pointer-events: none;
+            min-width: 150px;
+            padding: 8px 10px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--surface);
+            box-shadow: 0 4px 14px rgb(0 0 0 / 12%);
+            font-size: .82rem;
+        }
+        .chart-tooltip .tooltip-time { color: var(--muted); margin-bottom: 2px; }
+        .chart-tooltip .tooltip-value { font-weight: 600; }
+        .chart-stats { margin: 8px 0 0; color: var(--muted); font-size: .85rem; }
+        .chart-card details { margin-left: 0; }
+        .chart-card table { border-collapse: collapse; margin-top: 6px; font-size: .85rem; }
+        .chart-card th, .chart-card td { padding: 3px 14px 3px 0; text-align: left; }
+        .chart-card th { color: var(--muted); font-weight: 600; }
     </style>
 </head>
 <body>
@@ -214,7 +282,20 @@
         <button type="button" id="refresh">Verificar ahora</button>
     </header>
 
-    <main id="app"></main>
+    <main id="app">
+        <div id="overview"></div>
+
+        <h2>Recursos</h2>
+        <div
+            id="resources-monitor"
+            data-url="{{ route('security.resources') }}"
+            data-refresh-ms="{{ $resourcesRefreshSeconds * 1000 }}"
+            data-history-ms="{{ $resourcesHistoryMinutes * 60 * 1000 }}"
+            data-thresholds="{{ json_encode($resourceThresholds) }}"
+        ></div>
+
+        <div id="sections"></div>
+    </main>
 </div>
 
 <script>
@@ -232,6 +313,7 @@
         unknown: ['Estado incompleto', 'Algunos elementos no se pudieron verificar.'],
     };
     const SEVERITY = { critical: 3, warning: 2, unknown: 1, ok: 0 };
+    const RESOURCES_CATEGORY = 'Recursos';
 
     const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (char) => (
         { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]
@@ -274,7 +356,8 @@
     function render() {
         const status = report.overall.status;
         const [title, text] = BANNERS[status];
-        const categories = [...new Set(report.checks.map((c) => c.category))];
+        const categories = [...new Set(report.checks.map((c) => c.category))]
+            .filter((category) => category !== RESOURCES_CATEGORY);
 
         const chips = ['critical', 'warning', 'unknown', 'ok']
             .filter((s) => report.summary[s] > 0)
@@ -291,13 +374,13 @@
             return `<h2>${escapeHtml(category)}</h2><section class="grid">${cards}</section>`;
         }).join('');
 
-        document.getElementById('app').innerHTML = `
+        document.getElementById('overview').innerHTML = `
             <div class="banner status-${status}">
                 <span class="icon">${ICONS[status]}</span>
                 <div><strong>${title}</strong>${text}</div>
             </div>
-            <div class="summary">${chips}</div>
-            ${sections}`;
+            <div class="summary">${chips}</div>`;
+        document.getElementById('sections').innerHTML = sections;
 
         const alerts = (report.summary.critical || 0) + (report.summary.warning || 0);
         document.title = (alerts ? `(${alerts}) ` : '') + APP_NAME;
