@@ -50,18 +50,6 @@ class SecurityChecksTest extends TestCase
     }
 
     /**
-     * Patrón de Process::fake para un comando ejecutado como array (argumentos entre comillas).
-     *
-     * @param string $command Comando con argumentos separados por espacios.
-     *
-     * @return string Patrón con cada argumento entre comillas simples.
-     */
-    private static function command(string $command): string
-    {
-        return "'" . str_replace(' ', "' '", $command) . "'";
-    }
-
-    /**
      * Extrae los comandos de una lista de pasos de solución.
      *
      * @param list<FixStep> $steps Pasos de solución.

@@ -22,11 +22,6 @@ use Tests\TestCase;
 class ResourceChecksTest extends TestCase
 {
     /**
-     * Patrón de Process::fake para el comando df que usa ResourceSampler.
-     */
-    private const string DF_COMMAND = "'df' '-B1' '--output=source,fstype,size,used,avail,target'";
-
-    /**
      * Plataforma con la que se construyen los chequeos (Debian/Ubuntu salvo que la prueba indique otra).
      */
     private Platform $platform;
@@ -82,7 +77,7 @@ class ResourceChecksTest extends TestCase
      */
     private function samplerWithDisks(string $output): ResourceSampler
     {
-        Process::fake([self::DF_COMMAND => Process::result(
+        Process::fake([self::command('df -B1 --output=source,fstype,size,used,avail,target') => Process::result(
             "Filesystem     Type        1B-blocks         Used        Avail Mounted on\n{$output}"
         )]);
 
@@ -209,7 +204,7 @@ class ResourceChecksTest extends TestCase
     public function test_resources_endpoint_returns_live_sample_and_checks(): void
     {
         $this->app->instance(ResourceSampler::class, $this->samplerWithMemory(16, 8));
-        Process::fake([self::DF_COMMAND => Process::result(
+        Process::fake([self::command('df -B1 --output=source,fstype,size,used,avail,target') => Process::result(
             "Filesystem Type 1B-blocks Used Avail Mounted on\n/dev/sda1 ext4 100000000000 40000000000 60000000000 /\n"
         )]);
 

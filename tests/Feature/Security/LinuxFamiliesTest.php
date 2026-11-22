@@ -44,18 +44,6 @@ class LinuxFamiliesTest extends TestCase
     }
 
     /**
-     * Patrón de Process::fake para un comando ejecutado como array (argumentos entre comillas).
-     *
-     * @param string $command Comando con argumentos separados por espacios.
-     *
-     * @return string Patrón con cada argumento entre comillas simples.
-     */
-    private static function command(string $command): string
-    {
-        return "'" . str_replace(' ', "' '", $command) . "'";
-    }
-
-    /**
      * Inspector real para comandos (interceptados con Process::fake) y simulado para archivos y servicios.
      *
      * @param array<string, string|null> $files    Ruta => contenido.

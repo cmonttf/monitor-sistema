@@ -135,6 +135,10 @@ Es un comando de solo lectura: no permite cambiar reglas ni desactivar el cortaf
 
 Con **firewalld** no hace falta: sus reglas se consultan sin privilegios.
 
+## Seguridad del panel
+
+El panel solo atiende al propio equipo: el servidor escucha en `127.0.0.1` y, además, cada solicitud debe usar el nombre `127.0.0.1`, `localhost` o `[::1]` y venir de una dirección de loopback; si no, responde 403. Esto impide que una página web maliciosa lea el estado del equipo mediante *DNS rebinding* (un dominio externo que pasa a resolver a `127.0.0.1`).
+
 ## Configuración
 
 Variables de `.env`:
@@ -193,6 +197,20 @@ php artisan test   # pruebas
 ```
 
 Las pruebas simulan los comandos, archivos y respuestas de PowerShell, y bloquean la ejecución de procesos reales, así que no dependen del sistema en que se ejecutan: los chequeos de Windows se prueban también desde Linux y viceversa.
+
+### Pruebas de integración
+
+`tests/Integration` contiene pruebas **sin simulaciones**, que ejecutan los chequeos contra el sistema real. En Windows además revisan la sintaxis de todos los scripts de PowerShell. No forman parte de `composer quality` (ejecutarían comandos reales y tardan más); se corren aparte:
+
+```bash
+php artisan test tests/Integration
+```
+
+Cada archivo solo corre en su sistema (`LinuxSystemTest` en Linux y `WindowsSystemTest` en Windows); el otro se omite.
+
+### Integración continua
+
+En cada push a `main` y en cada pull request, [GitHub Actions](.github/workflows/ci.yml) ejecuta en **Ubuntu y Windows**: instalación, compilación de la interfaz, `composer quality` y las pruebas de integración.
 
 ## Autor
 
