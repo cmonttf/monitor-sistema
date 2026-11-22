@@ -1,0 +1,4 @@
+<?xml version="1.0"?>
+<ruleset name="UCSC" namespace="UCSC">
+    <description>Sniffs propios UCSC: constantes de clase comentadas, etiquetas obligatorias de clase y parámetros opcionales al final.</description>
+</ruleset>

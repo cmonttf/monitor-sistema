@@ -1,0 +1,59 @@
+<?xml version="1.0"?>
+<ruleset name="UDS">
+    <description>Estándar de calidad UDS/DSI: PSR-12, documentación PHPDoc obligatoria y sniffs UCSC.</description>
+
+    <file>app</file>
+    <file>config</file>
+    <file>database</file>
+    <file>routes</file>
+    <file>tests</file>
+
+    <exclude-pattern>*/vendor/*</exclude-pattern>
+    <exclude-pattern>*/storage/*</exclude-pattern>
+    <exclude-pattern>*/bootstrap/cache/*</exclude-pattern>
+    <exclude-pattern>*.blade.php</exclude-pattern>
+
+    <arg name="extensions" value="php"/>
+    <arg name="colors"/>
+    <arg value="sp"/>
+
+    <!-- Estilo -->
+    <rule ref="PSR12">
+        <!-- Excepción justificada: el archivo incluye una biblioteca legacy antes de declarar la clase.
+             Agregar un exclude-pattern por cada archivo justificado y registrarlo en MIGRACION.md. -->
+        <!-- <exclude-pattern>app/Ceade/Session.php</exclude-pattern> -->
+    </rule>
+    <rule ref="PSR1.Files.SideEffects">
+        <!-- <exclude-pattern>app/Ceade/Session.php</exclude-pattern> -->
+    </rule>
+    <rule ref="Generic.Files.LineLength">
+        <properties>
+            <property name="lineLimit" value="120"/>
+            <property name="absoluteLineLimit" value="0"/>
+        </properties>
+    </rule>
+    <rule ref="Squiz.WhiteSpace.FunctionSpacing">
+        <properties>
+            <property name="spacing" value="1"/>
+            <property name="spacingBeforeFirst" value="0"/>
+            <property name="spacingAfterLast" value="0"/>
+        </properties>
+    </rule>
+
+    <!-- Documentación (estándar UDS) -->
+    <rule ref="Generic.Commenting.DocComment"/>
+    <rule ref="PEAR.Commenting.FunctionComment">
+        <!-- El estándar UDS exige @param y @return; solo se relajan reglas de forma ajenas a PSR-12. -->
+        <exclude name="PEAR.Commenting.FunctionComment.SpacingAfterParamType"/>
+        <exclude name="PEAR.Commenting.FunctionComment.SpacingAfterParamName"/>
+    </rule>
+    <rule ref="Squiz.Commenting.FunctionCommentThrowTag"/>
+
+    <!-- Sniffs propios UCSC: constantes comentadas, etiquetas de clase, parámetros opcionales al final -->
+    <rule ref="./phpcs/UCSC"/>
+    <!-- Migraciones, seeders y pruebas: documentación de clase no obligatoria -->
+    <rule ref="./phpcs/UCSC/Sniffs/Commenting/EtiquetasObligatoriasClaseSniff.php">
+        <exclude-pattern>*/database/*</exclude-pattern>
+        <exclude-pattern>*/tests/*</exclude-pattern>
+    </rule>
+</ruleset>
